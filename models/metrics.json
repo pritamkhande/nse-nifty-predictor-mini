@@ -1,0 +1,16 @@
+{
+  "accuracy": 0.4801587301587302,
+  "n_train": 2899,
+  "n_test": 252,
+  "feature_cols": [
+    "ret_1",
+    "hl_range",
+    "ma_5",
+    "ret_5",
+    "ma_10",
+    "ret_10",
+    "ma_20",
+    "ret_20",
+    "vol_norm"
+  ]
+}
