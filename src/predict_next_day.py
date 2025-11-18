@@ -1,3 +1,5 @@
+# src/predict_next_day.py
+
 import json
 from pathlib import Path
 import datetime as dt
@@ -18,6 +20,25 @@ def make_features_for_latest(df: pd.DataFrame, feature_cols):
     df = df.copy()
     df = df.sort_values("Date").reset_index(drop=True)
 
+    # Same cleaning as in train_model.py
+    # Normalize column name for adjusted close if needed
+    df.rename(
+        columns={
+            "Adj Close": "AdjClose",
+            "Adj_Close": "AdjClose",
+        },
+        inplace=True,
+    )
+
+    # Force numeric for price/volume columns
+    for col in ["Open", "High", "Low", "Close", "AdjClose", "Volume"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # Drop rows where Close / Volume are missing
+    df = df.dropna(subset=["Close", "Volume"])
+
+    # Feature engineering (must match train_model)
     df["ret_1"] = df["Close"].pct_change()
     df["hl_range"] = (df["High"] - df["Low"]) / df["Close"].shift(1)
 
@@ -28,7 +49,11 @@ def make_features_for_latest(df: pd.DataFrame, feature_cols):
     df["vol_mean_20"] = df["Volume"].rolling(20).mean()
     df["vol_norm"] = df["Volume"] / df["vol_mean_20"]
 
+    # Drop NaNs created by rolling / pct_change
     df = df.dropna().reset_index(drop=True)
+
+    if df.empty:
+        raise ValueError("Not enough valid rows after cleaning to build features.")
 
     latest_row = df.iloc[-1]
     latest_features = latest_row[feature_cols].values.reshape(1, -1)
@@ -38,7 +63,8 @@ def make_features_for_latest(df: pd.DataFrame, feature_cols):
 
 
 def next_weekday(d: dt.date) -> dt.date:
-    while d.weekday() >= 5:
+    # Mon–Fri only; does not handle exchange holidays.
+    while d.weekday() >= 5:  # 5=Sat, 6=Sun
         d += dt.timedelta(days=1)
     return d
 
@@ -49,11 +75,15 @@ def main():
     if not MODEL_PATH.exists():
         raise FileNotFoundError("Run train_model.py first.")
 
+    # Read data
     df = pd.read_csv(DATA_PATH, parse_dates=["Date"])
+
+    # Load model + feature list
     bundle = joblib.load(MODEL_PATH)
     model = bundle["model"]
     feature_cols = bundle["feature_cols"]
 
+    # Build latest feature row
     X_latest, last_data_date = make_features_for_latest(df, feature_cols)
 
     proba_up = float(model.predict_proba(X_latest)[0, 1])
@@ -74,9 +104,11 @@ def main():
         "prob_down": float(1.0 - proba_up),
     }
 
+    # Save JSON
     with open(PRED_JSON_PATH, "w") as f:
         json.dump(result, f, indent=2)
 
+    # Append to history CSV
     row = {
         "generated_at_utc": now_utc,
         "last_data_date": last_data_date.isoformat(),
