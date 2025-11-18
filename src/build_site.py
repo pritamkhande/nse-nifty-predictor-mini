@@ -10,6 +10,7 @@ SITE_DIR = Path("site")
 DATA_PATH = Path("data") / "raw" / "nifty_daily.csv"
 PRED_JSON_PATH = Path("outputs") / "nifty_prediction.json"
 HIST_CSV_PATH = Path("outputs") / "nifty_predictions_history.csv"
+WINR_PATH = Path("outputs") / "winratio_last_30.json"
 
 
 def format_float(x, decimals=2):
@@ -22,7 +23,6 @@ def clean_price_data(df: pd.DataFrame) -> pd.DataFrame:
     """Make sure price/volume columns are numeric and valid."""
     df = df.copy()
 
-    # Normalise adjusted close column name if present
     df.rename(
         columns={
             "Adj Close": "AdjClose",
@@ -31,15 +31,33 @@ def clean_price_data(df: pd.DataFrame) -> pd.DataFrame:
         inplace=True,
     )
 
-    # Force numeric types
     for col in ["Open", "High", "Low", "Close", "AdjClose", "Volume"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Drop rows without valid Close / Volume
     df = df.dropna(subset=["Close", "Volume"])
 
     return df
+
+
+def load_win_ratio_summary() -> str:
+    """Return a short text like '18 / 30 (60.0%)' or 'No data yet'."""
+    if not WINR_PATH.exists():
+        return "No data yet"
+
+    try:
+        data = json.loads(WINR_PATH.read_text(encoding="utf-8"))
+        total = int(data.get("total_predictions", 0))
+        wins = int(data.get("wins", 0))
+        loss = int(data.get("loss", max(0, total - wins)))
+        win_ratio = float(data.get("win_ratio_percent", 0.0))
+    except Exception:
+        return "No data yet"
+
+    if total == 0:
+        return "No data yet"
+
+    return f"{wins} / {total} ({win_ratio:.2f}%)"
 
 
 def build_index():
@@ -72,7 +90,6 @@ def build_index():
 
     change_text = f"{sign}{format_float(change_abs)} ({sign}{format_float(change_pct)}%)"
 
-    # Load prediction JSON
     with open(PRED_JSON_PATH, "r") as f:
         pred = json.load(f)
 
@@ -86,7 +103,8 @@ def build_index():
     generated_at_utc = pred["generated_at_utc"]
     predicted_for = pred["predicted_for"]
 
-    # Recent history (last 7)
+    win_ratio_summary = load_win_ratio_summary()
+
     if HIST_CSV_PATH.exists():
         hist_df = pd.read_csv(HIST_CSV_PATH)
         hist_df = hist_df.sort_values("generated_at_utc", ascending=False)
@@ -134,6 +152,7 @@ def build_index():
         .replace("{{GENERATED_AT_UTC}}", generated_at_utc)
         .replace("{{PREDICTED_FOR}}", predicted_for)
         .replace("{{RECENT_ROWS}}", recent_rows_str)
+        .replace("{{WIN_RATIO_SUMMARY}}", win_ratio_summary)
     )
 
     SITE_DIR.mkdir(parents=True, exist_ok=True)
@@ -175,8 +194,14 @@ def build_history():
         else "<tr><td colspan=\"7\">No predictions yet.</td></tr>"
     )
 
+    win_ratio_summary = load_win_ratio_summary()
+
     template = (TEMPLATES_DIR / "history.html").read_text(encoding="utf-8")
-    html_out = template.replace("{{HISTORY_ROWS}}", rows_str)
+    html_out = (
+        template
+        .replace("{{HISTORY_ROWS}}", rows_str)
+        .replace("{{WIN_RATIO_SUMMARY}}", win_ratio_summary)
+    )
 
     SITE_DIR.mkdir(parents=True, exist_ok=True)
     (SITE_DIR / "history.html").write_text(html_out, encoding="utf-8")
