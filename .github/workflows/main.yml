@@ -45,6 +45,10 @@ jobs:
       - name: Generate next-day prediction and history
         run: python src/predict_next_day.py
 
+      - name: Calculate last 30-day win ratio
+        run: python src/calc_winratio.py
+
+
       - name: Build static site
         run: python src/build_site.py
 
