@@ -1,3 +1,5 @@
+# src/train_model.py
+
 from pathlib import Path
 
 import json
@@ -20,18 +22,31 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df = df.sort_values("Date").reset_index(drop=True)
 
+    # Ensure numeric types (important if CSV has strings)
+    for col in ["Open", "High", "Low", "Close", "AdjClose", "Volume"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # Drop rows where Close or Volume is missing
+    df = df.dropna(subset=["Close", "Volume"])
+
+    # Basic features
     df["ret_1"] = df["Close"].pct_change()
     df["hl_range"] = (df["High"] - df["Low"]) / df["Close"].shift(1)
 
+    # Moving averages & momentum
     for win in [5, 10, 20]:
         df[f"ma_{win}"] = df["Close"].rolling(win).mean()
         df[f"ret_{win}"] = df["Close"].pct_change(win)
 
+    # Normalized volume
     df["vol_mean_20"] = df["Volume"].rolling(20).mean()
     df["vol_norm"] = df["Volume"] / df["vol_mean_20"]
 
+    # Target: next-day direction
     df["target_up"] = (df["Close"].shift(-1) > df["Close"]).astype(int)
 
+    # Clean NaNs and remove last row (no target because of shift(-1))
     df = df.dropna().reset_index(drop=True)
     df = df.iloc[:-1, :]
 
@@ -42,7 +57,18 @@ def train_model():
     if not DATA_PATH.exists():
         raise FileNotFoundError(f"{DATA_PATH} not found. Run download_nifty.py first.")
 
+    # Read data
     df = pd.read_csv(DATA_PATH, parse_dates=["Date"])
+
+    # Normalise column names just in case
+    df.rename(
+        columns={
+            "Adj Close": "AdjClose",
+            "Adj_Close": "AdjClose",
+        },
+        inplace=True,
+    )
+
     df_feat = make_features(df)
 
     feature_cols = [
@@ -65,6 +91,7 @@ def train_model():
     X = df_feat[feature_cols].values
     y = df_feat["target_up"].values
 
+    # Time-based split: last ~252 days as test if enough data
     if len(df_feat) > 300:
         X_train, X_test = X[:-252], X[-252:]
         y_train, y_test = y[:-252], y[-252:]
