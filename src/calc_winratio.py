@@ -4,7 +4,7 @@
 # For each evaluated index i, we train on all data up to i-1,
 # predict direction for move from day i to i+1,
 # and compare with the actual next-day move.
-# Stores OHLC and Win/Loss for each of those 30 trades.
+# Stores OHLC, probabilities and Win/Loss for each of those 30 trades.
 
 from pathlib import Path
 import json
@@ -125,6 +125,8 @@ def main():
         clf.fit(X_train, y_train)
 
         proba_up = float(clf.predict_proba(X_test)[0, 1])
+        proba_up_pct = round(proba_up * 100.0, 1)
+        proba_down_pct = round(100.0 - proba_up_pct, 1)
         pred_up = 1 if proba_up >= 0.5 else 0
 
         win = (pred_up == y_test)
@@ -135,7 +137,8 @@ def main():
                 "as_of_date": as_of_date.isoformat(),
                 "predicted_for": pred_for_date.isoformat(),
                 "ai_prediction": "UP" if pred_up == 1 else "DOWN",
-                "prob_up": round(proba_up * 100.0, 1),
+                "prob_up": proba_up_pct,
+                "prob_down": proba_down_pct,
                 "actual_up": int(y_test),  # 1 = market went UP, 0 = DOWN
                 "open_as_of": round(o_asof, 2),
                 "high_as_of": round(h_asof, 2),
