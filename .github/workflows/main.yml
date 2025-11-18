@@ -7,7 +7,7 @@ on:
     - cron: "15 10 * * 1-5"
 
 permissions:
-  contents: read
+  contents: write     # allow committing back to the repo
   pages: write
   id-token: write
 
@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -45,6 +47,26 @@ jobs:
 
       - name: Build static site
         run: python src/build_site.py
+
+      - name: Commit data, model, outputs, and site
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Ensure directories exist (they will if scripts ran)
+          mkdir -p data/raw models outputs site
+
+          # Stage files you want to persist
+          git add data/raw/nifty_daily.csv || true
+          git add models || true
+          git add outputs || true
+          git add site || true
+
+          # Commit only if there are changes
+          git commit -m "Update Nifty data, model, outputs, and site [skip ci]" || echo "No changes to commit"
+
+          # Push back to the default branch
+          git push || echo "Nothing to push"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
