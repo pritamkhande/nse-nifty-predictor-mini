@@ -52,26 +52,36 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Rename common variations to a standard schema."""
     df = df.copy()
 
-    # Date
+    # ---------------- Date column detection ----------------
     date_col = _first_existing(df, ["Date", "date", "DATE"])
     if date_col is None:
-        raise ValueError("No Date column found (tried Date/date/DATE).")
+        # heuristic: any column whose name contains "date", "day", "time", "timestamp"
+        for c in df.columns:
+            cl = str(c).lower()
+            if "date" in cl or "day" in cl or "time" in cl or "timestamp" in cl:
+                date_col = c
+                break
+
+    if date_col is None:
+        # final fallback: treat first column as Date
+        date_col = df.columns[0]
+
     df.rename(columns={date_col: "Date"}, inplace=True)
 
-    # OHLC (optional – if missing, we just won't show them)
+    # ---------------- OHLC (optional) ----------------
     col_map = {}
     for target, candidates in {
-        "Open": ["Open", "open", "OPEN"],
-        "High": ["High", "high", "HIGH"],
-        "Low": ["Low", "low", "LOW"],
-        "Close": ["Close", "close", "CLOSE", "Adj Close", "adj_close"],
+        "Open": ["Open", "open", "OPEN", "o"],
+        "High": ["High", "high", "HIGH", "h"],
+        "Low": ["Low", "low", "LOW", "l"],
+        "Close": ["Close", "close", "CLOSE", "Adj Close", "adj_close", "c"],
     }.items():
         c = _first_existing(df, candidates)
         if c is not None:
             col_map[c] = target
     df.rename(columns=col_map, inplace=True)
 
-    # Prob_UP / Prob_DOWN
+    # ---------------- Prob_UP / Prob_DOWN ----------------
     prob_up_col = _first_existing(
         df,
         ["Prob_UP", "prob_up", "PROB_UP", "p_up", "prob_up_next", "prob_long"],
@@ -90,15 +100,16 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
     if prob_down_col is not None:
         df.rename(columns={prob_down_col: "Prob_DOWN"}, inplace=True)
     else:
-        # derive if absent
         df["Prob_DOWN"] = 1.0 - df["Prob_UP"]
 
-    # Actual_UP (0/1 or UP/DOWN)
+    # ---------------- Actual_UP (0/1 or UP/DOWN) ----------------
     actual_col = _first_existing(
         df,
-        ["Actual_UP", "actual_up", "ACTUAL_UP",
-         "Actual", "actual", "Target", "target", "Label", "label",
-         "Direction", "direction"],
+        [
+            "Actual_UP", "actual_up", "ACTUAL_UP",
+            "Actual", "actual", "Target", "target",
+            "Label", "label", "Direction", "direction",
+        ],
     )
     if actual_col is None:
         raise ValueError(
@@ -108,7 +119,6 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
     series = df[actual_col]
 
     if series.dtype == object:
-        # strings like "UP", "DOWN", "Up", "Down", maybe booleans
         df["Actual_UP"] = series.astype(str).str.upper().map(
             {"UP": 1, "DOWN": 0, "1": 1, "0": 0, "TRUE": 1, "FALSE": 0}
         )
@@ -121,7 +131,6 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
             "Make sure values are UP/DOWN or 0/1."
         )
 
-    # Only keep standardised names (others are kept as-is)
     return df
 
 
