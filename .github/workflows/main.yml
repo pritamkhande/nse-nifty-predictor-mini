@@ -1,0 +1,68 @@
+name: Build & Deploy – Nifty Mini Site
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Mon–Fri at 10:15 UTC (~15:45 IST)
+    - cron: "15 10 * * 1-5"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download latest Nifty data
+        run: python src/download_nifty.py
+
+      - name: Train / update model
+        run: python src/train_model.py
+
+      - name: Generate next-day prediction and history
+        run: python src/predict_next_day.py
+
+      - name: Build static site
+        run: python src/build_site.py
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
