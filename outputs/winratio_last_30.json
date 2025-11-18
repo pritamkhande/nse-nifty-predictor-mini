@@ -1,7 +1,310 @@
 {
-  "total_predictions": 0,
-  "wins": 0,
-  "loss": 0,
-  "win_ratio_percent": 0.0,
-  "details": []
+  "mode": "rolling_backtest_last_30",
+  "min_train_size": 252,
+  "total_predictions": 30,
+  "wins": 18,
+  "loss": 12,
+  "win_ratio_percent": 60.0,
+  "details": [
+    {
+      "as_of_date": "2025-10-03",
+      "predicted_for": "2025-10-06",
+      "ai_prediction": "UP",
+      "prob_up": 51.4,
+      "actual_up": 1,
+      "close_as_of": 24894.25,
+      "close_next": 25077.65,
+      "result": "WIN"
+    },
+    {
+      "as_of_date": "2025-10-06",
+      "predicted_for": "2025-10-07",
+      "ai_prediction": "UP",
+      "prob_up": 55.4,
+      "actual_up": 1,
+      "close_as_of": 25077.65,
+      "close_next": 25108.3,
+      "result": "WIN"
+    },
+    {
+      "as_of_date": "2025-10-07",
+      "predicted_for": "2025-10-08",
+      "ai_prediction": "UP",
+      "prob_up": 53.5,
+      "actual_up": 0,
+      "close_as_of": 25108.3,
+      "close_next": 25046.15,
+      "result": "LOSS"
+    },
+    {
+      "as_of_date": "2025-10-08",
+      "predicted_for": "2025-10-09",
+      "ai_prediction": "DOWN",
+      "prob_up": 46.8,
+      "actual_up": 1,
+      "close_as_of": 25046.15,
+      "close_next": 25181.8,
+      "result": "LOSS"
+    },
+    {
+      "as_of_date": "2025-10-09",
+      "predicted_for": "2025-10-10",
+      "ai_prediction": "UP",
+      "prob_up": 53.4,
+      "actual_up": 1,
+      "close_as_of": 25181.8,
+      "close_next": 25285.35,
+      "result": "WIN"
+    },
+    {
+      "as_of_date": "2025-10-10",
+      "predicted_for": "2025-10-13",
+      "ai_prediction": "UP",
+      "prob_up": 56.4,
+      "actual_up": 0,
+      "close_as_of": 25285.35,
+      "close_next": 25227.35,
+      "result": "LOSS"
+    },
+    {
+      "as_of_date": "2025-10-13",
+      "predicted_for": "2025-10-14",
+      "ai_prediction": "DOWN",
+      "prob_up": 44.9,
+      "actual_up": 0,
+      "close_as_of": 25227.35,
+      "close_next": 25145.5,
+      "result": "WIN"
+    },
+    {
+      "as_of_date": "2025-10-14",
+      "predicted_for": "2025-10-15",
+      "ai_prediction": "DOWN",
+      "prob_up": 41.3,
+      "actual_up": 1,
+      "close_as_of": 25145.5,
+      "close_next": 25323.55,
+      "result": "LOSS"
+    },
+    {
+      "as_of_date": "2025-10-15",
+      "predicted_for": "2025-10-16",
+      "ai_prediction": "UP",
+      "prob_up": 54.8,
+      "actual_up": 1,
+      "close_as_of": 25323.55,
+      "close_next": 25585.3,
+      "result": "WIN"
+    },
+    {
+      "as_of_date": "2025-10-16",
+      "predicted_for": "2025-10-17",
+      "ai_prediction": "UP",
+      "prob_up": 63.1,
+      "actual_up": 1,
+      "close_as_of": 25585.3,
+      "close_next": 25709.85,
+      "result": "WIN"
+    },
+    {
+      "as_of_date": "2025-10-17",
+      "predicted_for": "2025-10-20",
+      "ai_prediction": "UP",
+      "prob_up": 59.2,
+      "actual_up": 1,
+      "close_as_of": 25709.85,
+      "close_next": 25843.15,
+      "result": "WIN"
+    },
+    {
+      "as_of_date": "2025-10-20",
+      "predicted_for": "2025-10-21",
+      "ai_prediction": "UP",
+      "prob_up": 57.5,
+      "actual_up": 1,
+      "close_as_of": 25843.15,
+      "close_next": 25868.6,
+      "result": "WIN"
+    },
+    {
+      "as_of_date": "2025-10-21",
+      "predicted_for": "2025-10-23",
+      "ai_prediction": "UP",
+      "prob_up": 60.0,
+      "actual_up": 1,
+      "close_as_of": 25868.6,
+      "close_next": 25891.4,
+      "result": "WIN"
+    },
+    {
+      "as_of_date": "2025-10-23",
+      "predicted_for": "2025-10-24",
+      "ai_prediction": "UP",
+      "prob_up": 55.9,
+      "actual_up": 0,
+      "close_as_of": 25891.4,
+      "close_next": 25795.15,
+      "result": "LOSS"
+    },
+    {
+      "as_of_date": "2025-10-24",
+      "predicted_for": "2025-10-27",
+      "ai_prediction": "DOWN",
+      "prob_up": 43.8,
+      "actual_up": 1,
+      "close_as_of": 25795.15,
+      "close_next": 25966.05,
+      "result": "LOSS"
+    },
+    {
+      "as_of_date": "2025-10-27",
+      "predicted_for": "2025-10-28",
+      "ai_prediction": "UP",
+      "prob_up": 55.5,
+      "actual_up": 0,
+      "close_as_of": 25966.05,
+      "close_next": 25936.2,
+      "result": "LOSS"
+    },
+    {
+      "as_of_date": "2025-10-28",
+      "predicted_for": "2025-10-29",
+      "ai_prediction": "DOWN",
+      "prob_up": 37.4,
+      "actual_up": 1,
+      "close_as_of": 25936.2,
+      "close_next": 26053.9,
+      "result": "LOSS"
+    },
+    {
+      "as_of_date": "2025-10-29",
+      "predicted_for": "2025-10-30",
+      "ai_prediction": "DOWN",
+      "prob_up": 43.2,
+      "actual_up": 0,
+      "close_as_of": 26053.9,
+      "close_next": 25877.85,
+      "result": "WIN"
+    },
+    {
+      "as_of_date": "2025-10-30",
+      "predicted_for": "2025-10-31",
+      "ai_prediction": "DOWN",
+      "prob_up": 39.6,
+      "actual_up": 0,
+      "close_as_of": 25877.85,
+      "close_next": 25722.1,
+      "result": "WIN"
+    },
+    {
+      "as_of_date": "2025-10-31",
+      "predicted_for": "2025-11-03",
+      "ai_prediction": "DOWN",
+      "prob_up": 30.2,
+      "actual_up": 1,
+      "close_as_of": 25722.1,
+      "close_next": 25763.35,
+      "result": "LOSS"
+    },
+    {
+      "as_of_date": "2025-11-03",
+      "predicted_for": "2025-11-04",
+      "ai_prediction": "DOWN",
+      "prob_up": 49.5,
+      "actual_up": 0,
+      "close_as_of": 25763.35,
+      "close_next": 25597.65,
+      "result": "WIN"
+    },
+    {
+      "as_of_date": "2025-11-04",
+      "predicted_for": "2025-11-06",
+      "ai_prediction": "DOWN",
+      "prob_up": 40.4,
+      "actual_up": 0,
+      "close_as_of": 25597.65,
+      "close_next": 25509.7,
+      "result": "WIN"
+    },
+    {
+      "as_of_date": "2025-11-06",
+      "predicted_for": "2025-11-07",
+      "ai_prediction": "DOWN",
+      "prob_up": 34.5,
+      "actual_up": 0,
+      "close_as_of": 25509.7,
+      "close_next": 25492.3,
+      "result": "WIN"
+    },
+    {
+      "as_of_date": "2025-11-07",
+      "predicted_for": "2025-11-10",
+      "ai_prediction": "DOWN",
+      "prob_up": 31.8,
+      "actual_up": 1,
+      "close_as_of": 25492.3,
+      "close_next": 25574.35,
+      "result": "LOSS"
+    },
+    {
+      "as_of_date": "2025-11-10",
+      "predicted_for": "2025-11-11",
+      "ai_prediction": "DOWN",
+      "prob_up": 38.9,
+      "actual_up": 1,
+      "close_as_of": 25574.35,
+      "close_next": 25694.95,
+      "result": "LOSS"
+    },
+    {
+      "as_of_date": "2025-11-11",
+      "predicted_for": "2025-11-12",
+      "ai_prediction": "UP",
+      "prob_up": 52.6,
+      "actual_up": 1,
+      "close_as_of": 25694.95,
+      "close_next": 25875.8,
+      "result": "WIN"
+    },
+    {
+      "as_of_date": "2025-11-12",
+      "predicted_for": "2025-11-13",
+      "ai_prediction": "UP",
+      "prob_up": 56.3,
+      "actual_up": 1,
+      "close_as_of": 25875.8,
+      "close_next": 25879.15,
+      "result": "WIN"
+    },
+    {
+      "as_of_date": "2025-11-13",
+      "predicted_for": "2025-11-14",
+      "ai_prediction": "UP",
+      "prob_up": 55.6,
+      "actual_up": 1,
+      "close_as_of": 25879.15,
+      "close_next": 25910.05,
+      "result": "WIN"
+    },
+    {
+      "as_of_date": "2025-11-14",
+      "predicted_for": "2025-11-17",
+      "ai_prediction": "UP",
+      "prob_up": 56.8,
+      "actual_up": 1,
+      "close_as_of": 25910.05,
+      "close_next": 26013.45,
+      "result": "WIN"
+    },
+    {
+      "as_of_date": "2025-11-17",
+      "predicted_for": "2025-11-18",
+      "ai_prediction": "UP",
+      "prob_up": 55.3,
+      "actual_up": 0,
+      "close_as_of": 26013.45,
+      "close_next": 25910.05,
+      "result": "LOSS"
+    }
+  ]
 }
