@@ -19,45 +19,61 @@ def main():
     df = pd.read_csv(DATA_PATH, parse_dates=["Date"])
     df = df.sort_values("Date").reset_index(drop=True)
 
-    # Compute actual next-day movement
+    # Ensure numeric
+    for col in ["Open", "High", "Low", "Close", "AdjClose", "Volume"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # Compute next-day close and actual direction
     df["next_close"] = df["Close"].shift(-1)
-    df["actual_up"] = (df["next_close"] > df["Close"]).astype(int)
+    # Set actual_up to NaN when next_close is NaN (no next day yet)
+    df["actual_up"] = (df["next_close"] > df["Close"]).astype("float")
+    df.loc[df["next_close"].isna(), "actual_up"] = pd.NA
 
     # Load AI predictions
     hist = pd.read_csv(HIST_PATH)
     hist = hist.sort_values("generated_at_utc", ascending=False).reset_index(drop=True)
 
-    # Take last 30 predictions
+    # Take last 30 predictions (by time)
     hist_30 = hist.head(30).copy()
 
     results = []
     win_count = 0
 
     for _, row in hist_30.iterrows():
-        pred_for = str(row["predicted_for"])
+        pred_for_str = str(row["predicted_for"])
+        try:
+            pred_for_date = pd.to_datetime(pred_for_str).date()
+        except Exception:
+            continue
 
-        # Find matching actual close/next_close
-        match = df[df["Date"] == pred_for]
-
+        # Match by calendar date
+        match = df[df["Date"].dt.date == pred_for_date]
         if match.empty:
-            continue  # no market data for holiday yet
+            # No market data (holiday or future date)
+            continue
 
-        actual_up = int(match["actual_up"].values[0])
-        ai_up = 1 if row["prediction"].upper() == "UP" else 0
+        actual_up_val = match["actual_up"].values[0]
+        if pd.isna(actual_up_val):
+            # No next-day close yet, cannot evaluate this trade
+            continue
+
+        actual_up = int(actual_up_val)
+        ai_up = 1 if str(row["prediction"]).upper() == "UP" else 0
 
         win = (ai_up == actual_up)
         win_count += int(win)
 
         results.append({
-            "prediction_for": pred_for,
-            "ai_prediction": row["prediction"],
-            "prob_up": round(row["prob_up"] * 100, 1),
+            "prediction_for": pred_for_str,
+            "ai_prediction": str(row["prediction"]).upper(),
+            "prob_up": round(float(row["prob_up"]) * 100, 1),
             "actual_up": actual_up,
             "result": "WIN" if win else "LOSS"
         })
 
     total = len(results)
-    win_ratio = (win_count / total * 100) if total > 0 else 0
+    win_ratio = (win_count / total * 100) if total > 0 else 0.0
 
     output = {
         "total_predictions": total,
@@ -67,7 +83,7 @@ def main():
         "details": results
     }
 
-    OUT_PATH.write_text(json.dumps(output, indent=2))
+    OUT_PATH.write_text(json.dumps(output, indent=2), encoding="utf-8")
     print(json.dumps(output, indent=2))
 
 
