@@ -2,13 +2,13 @@
 #
 # Rolling backtest for the last 30 trading days.
 # For each evaluated index i, we train on all data up to i-1,
-# predict direction for day i (move from day i to i+1),
-# and compare with actual.
+# predict direction for move from day i to i+1,
+# and compare with the actual next-day move.
+# Stores OHLC and Win/Loss for each of those 30 trades.
 
 from pathlib import Path
 import json
 
-import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 
@@ -17,11 +17,9 @@ OUT_PATH = Path("outputs/winratio_last_30.json")
 
 
 def make_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Same feature engineering as in train_model.py, for backtest."""
     df = df.copy()
     df = df.sort_values("Date").reset_index(drop=True)
 
-    # Normalise adjusted close name if present
     df.rename(
         columns={
             "Adj Close": "AdjClose",
@@ -30,15 +28,12 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
         inplace=True,
     )
 
-    # Ensure numeric
     for col in ["Open", "High", "Low", "Close", "AdjClose", "Volume"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Drop invalid rows
     df = df.dropna(subset=["Close", "Volume"])
 
-    # Features
     df["ret_1"] = df["Close"].pct_change()
     df["hl_range"] = (df["High"] - df["Low"]) / df["Close"].shift(1)
 
@@ -49,10 +44,8 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
     df["vol_mean_20"] = df["Volume"].rolling(20).mean()
     df["vol_norm"] = df["Volume"] / df["vol_mean_20"]
 
-    # Target: next-day direction
     df["target_up"] = (df["Close"].shift(-1) > df["Close"]).astype(int)
 
-    # Remove rows with NaNs from rolling / pct_change; the last row has NaN target
     df = df.dropna().reset_index(drop=True)
 
     return df
@@ -85,40 +78,43 @@ def main():
     X_all = df_feat[feature_cols].values
     y_all = df_feat["target_up"].values
     dates_all = df_feat["Date"].dt.date.values
-    closes_all = df_feat["Close"].values
+
+    open_all = df_feat["Open"].values
+    high_all = df_feat["High"].values
+    low_all = df_feat["Low"].values
+    close_all = df_feat["Close"].values
 
     n = len(df_feat)
     if n < 300:
         raise ValueError("Not enough history to do a 30-day rolling backtest.")
 
-    # At least ~1 year for training
     min_train = 252
-
-    # We must stop at n-2 so that idx+1 is within [0, n-1]
-    last_valid_idx = n - 2
+    last_valid_idx = n - 2  # we will access idx+1
     if last_valid_idx <= min_train:
         raise ValueError("Not enough data after training window to backtest.")
 
     valid_indices = list(range(min_train, last_valid_idx + 1))
-    # Take up to last 30 indices
     eval_indices = valid_indices[-30:]
 
     results = []
     win_count = 0
 
     for idx in eval_indices:
-        # Train on data strictly before idx
+        # train on up to idx-1 (strictly past)
         X_train = X_all[:idx, :]
         y_train = y_all[:idx]
 
         X_test = X_all[idx, :].reshape(1, -1)
         y_test = int(y_all[idx])
 
-        # as_of_date is date[idx]; prediction is for move to date[idx+1]
         as_of_date = dates_all[idx]
         pred_for_date = dates_all[idx + 1]
-        close_as_of = float(closes_all[idx])
-        close_next = float(closes_all[idx + 1])
+
+        o_asof = float(open_all[idx])
+        h_asof = float(high_all[idx])
+        l_asof = float(low_all[idx])
+        c_asof = float(close_all[idx])
+        c_next = float(close_all[idx + 1])
 
         clf = RandomForestClassifier(
             n_estimators=300,
@@ -140,9 +136,12 @@ def main():
                 "predicted_for": pred_for_date.isoformat(),
                 "ai_prediction": "UP" if pred_up == 1 else "DOWN",
                 "prob_up": round(proba_up * 100.0, 1),
-                "actual_up": int(y_test),
-                "close_as_of": round(close_as_of, 2),
-                "close_next": round(close_next, 2),
+                "actual_up": int(y_test),  # 1 = market went UP, 0 = DOWN
+                "open_as_of": round(o_asof, 2),
+                "high_as_of": round(h_asof, 2),
+                "low_as_of": round(l_asof, 2),
+                "close_as_of": round(c_asof, 2),
+                "close_next": round(c_next, 2),
                 "result": "WIN" if win else "LOSS",
             }
         )
