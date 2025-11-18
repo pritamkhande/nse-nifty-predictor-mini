@@ -1,3 +1,5 @@
+# src/build_site.py
+
 from pathlib import Path
 import pandas as pd
 import html
@@ -16,6 +18,30 @@ def format_float(x, decimals=2):
     return f"{x:.{decimals}f}"
 
 
+def clean_price_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Make sure price/volume columns are numeric and valid."""
+    df = df.copy()
+
+    # Normalise adjusted close column name if present
+    df.rename(
+        columns={
+            "Adj Close": "AdjClose",
+            "Adj_Close": "AdjClose",
+        },
+        inplace=True,
+    )
+
+    # Force numeric types
+    for col in ["Open", "High", "Low", "Close", "AdjClose", "Volume"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # Drop rows without valid Close / Volume
+    df = df.dropna(subset=["Close", "Volume"])
+
+    return df
+
+
 def build_index():
     if not DATA_PATH.exists():
         raise FileNotFoundError(f"{DATA_PATH} not found. Run download_nifty.py.")
@@ -24,6 +50,10 @@ def build_index():
 
     df = pd.read_csv(DATA_PATH, parse_dates=["Date"])
     df = df.sort_values("Date")
+    df = clean_price_data(df)
+
+    if df.empty:
+        raise ValueError("No valid rows in nifty_daily.csv after cleaning.")
 
     latest = df.iloc[-1]
     last_date = latest["Date"].date()
@@ -42,6 +72,7 @@ def build_index():
 
     change_text = f"{sign}{format_float(change_abs)} ({sign}{format_float(change_pct)}%)"
 
+    # Load prediction JSON
     with open(PRED_JSON_PATH, "r") as f:
         pred = json.load(f)
 
@@ -55,12 +86,15 @@ def build_index():
     generated_at_utc = pred["generated_at_utc"]
     predicted_for = pred["predicted_for"]
 
+    # Recent history (last 7)
     if HIST_CSV_PATH.exists():
         hist_df = pd.read_csv(HIST_CSV_PATH)
         hist_df = hist_df.sort_values("generated_at_utc", ascending=False)
         recent = hist_df.head(7)
     else:
-        recent = pd.DataFrame(columns=["generated_at_utc", "predicted_for", "prediction", "prob_up", "prob_down"])
+        recent = pd.DataFrame(
+            columns=["generated_at_utc", "predicted_for", "prediction", "prob_up", "prob_down"]
+        )
 
     recent_rows_html = []
     for _, row in recent.iterrows():
@@ -77,7 +111,12 @@ def build_index():
             f"<td>{prob_down_r}%</td>"
             "</tr>"
         )
-    recent_rows_str = "\n".join(recent_rows_html) if recent_rows_html else "<tr><td colspan=\"5\">No history yet.</td></tr>"
+
+    recent_rows_str = (
+        "\n".join(recent_rows_html)
+        if recent_rows_html
+        else "<tr><td colspan=\"5\">No history yet.</td></tr>"
+    )
 
     template = (TEMPLATES_DIR / "index.html").read_text(encoding="utf-8")
 
@@ -104,7 +143,9 @@ def build_index():
 
 def build_history():
     if not HIST_CSV_PATH.exists():
-        raise FileNotFoundError(f"{HIST_CSV_PATH} not found. Run predict_next_day.py at least once.")
+        raise FileNotFoundError(
+            f"{HIST_CSV_PATH} not found. Run predict_next_day.py at least once."
+        )
 
     hist_df = pd.read_csv(HIST_CSV_PATH)
     hist_df = hist_df.sort_values("generated_at_utc", ascending=False).reset_index(drop=True)
@@ -128,7 +169,11 @@ def build_history():
             "</tr>"
         )
 
-    rows_str = "\n".join(rows_html) if rows_html else "<tr><td colspan=\"7\">No predictions yet.</td></tr>"
+    rows_str = (
+        "\n".join(rows_html)
+        if rows_html
+        else "<tr><td colspan=\"7\">No predictions yet.</td></tr>"
+    )
 
     template = (TEMPLATES_DIR / "history.html").read_text(encoding="utf-8")
     html_out = template.replace("{{HISTORY_ROWS}}", rows_str)
