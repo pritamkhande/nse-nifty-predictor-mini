@@ -12,6 +12,9 @@
       "ai_prediction": "UP",
       "prob_up": 51.4,
       "actual_up": 1,
+      "open_as_of": 24759.55,
+      "high_as_of": 24904.8,
+      "low_as_of": 24747.55,
       "close_as_of": 24894.25,
       "close_next": 25077.65,
       "result": "WIN"
@@ -22,6 +25,9 @@
       "ai_prediction": "UP",
       "prob_up": 55.4,
       "actual_up": 1,
+      "open_as_of": 24916.55,
+      "high_as_of": 25095.95,
+      "low_as_of": 24881.65,
       "close_as_of": 25077.65,
       "close_next": 25108.3,
       "result": "WIN"
@@ -32,6 +38,9 @@
       "ai_prediction": "UP",
       "prob_up": 53.5,
       "actual_up": 0,
+      "open_as_of": 25085.3,
+      "high_as_of": 25220.9,
+      "low_as_of": 25076.3,
       "close_as_of": 25108.3,
       "close_next": 25046.15,
       "result": "LOSS"
@@ -42,6 +51,9 @@
       "ai_prediction": "DOWN",
       "prob_up": 46.8,
       "actual_up": 1,
+      "open_as_of": 25079.75,
+      "high_as_of": 25192.5,
+      "low_as_of": 25008.5,
       "close_as_of": 25046.15,
       "close_next": 25181.8,
       "result": "LOSS"
@@ -52,6 +64,9 @@
       "ai_prediction": "UP",
       "prob_up": 53.4,
       "actual_up": 1,
+      "open_as_of": 25074.3,
+      "high_as_of": 25199.25,
+      "low_as_of": 25024.3,
       "close_as_of": 25181.8,
       "close_next": 25285.35,
       "result": "WIN"
@@ -62,6 +77,9 @@
       "ai_prediction": "UP",
       "prob_up": 56.4,
       "actual_up": 0,
+      "open_as_of": 25167.65,
+      "high_as_of": 25330.75,
+      "low_as_of": 25156.85,
       "close_as_of": 25285.35,
       "close_next": 25227.35,
       "result": "LOSS"
@@ -72,6 +90,9 @@
       "ai_prediction": "DOWN",
       "prob_up": 44.9,
       "actual_up": 0,
+      "open_as_of": 25177.3,
+      "high_as_of": 25267.3,
+      "low_as_of": 25152.3,
       "close_as_of": 25227.35,
       "close_next": 25145.5,
       "result": "WIN"
@@ -82,6 +103,9 @@
       "ai_prediction": "DOWN",
       "prob_up": 41.3,
       "actual_up": 1,
+      "open_as_of": 25277.55,
+      "high_as_of": 25310.35,
+      "low_as_of": 25060.55,
       "close_as_of": 25145.5,
       "close_next": 25323.55,
       "result": "LOSS"
@@ -92,6 +116,9 @@
       "ai_prediction": "UP",
       "prob_up": 54.8,
       "actual_up": 1,
+      "open_as_of": 25181.95,
+      "high_as_of": 25365.15,
+      "low_as_of": 25159.35,
       "close_as_of": 25323.55,
       "close_next": 25585.3,
       "result": "WIN"
@@ -102,6 +129,9 @@
       "ai_prediction": "UP",
       "prob_up": 63.1,
       "actual_up": 1,
+      "open_as_of": 25394.9,
+      "high_as_of": 25625.4,
+      "low_as_of": 25376.85,
       "close_as_of": 25585.3,
       "close_next": 25709.85,
       "result": "WIN"
@@ -112,6 +142,9 @@
       "ai_prediction": "UP",
       "prob_up": 59.2,
       "actual_up": 1,
+      "open_as_of": 25546.85,
+      "high_as_of": 25781.5,
+      "low_as_of": 25508.6,
       "close_as_of": 25709.85,
       "close_next": 25843.15,
       "result": "WIN"
@@ -122,6 +155,9 @@
       "ai_prediction": "UP",
       "prob_up": 57.5,
       "actual_up": 1,
+      "open_as_of": 25824.6,
+      "high_as_of": 25926.2,
+      "low_as_of": 25788.5,
       "close_as_of": 25843.15,
       "close_next": 25868.6,
       "result": "WIN"
@@ -132,6 +168,9 @@
       "ai_prediction": "UP",
       "prob_up": 60.0,
       "actual_up": 1,
+      "open_as_of": 25901.2,
+      "high_as_of": 25934.35,
+      "low_as_of": 25825.8,
       "close_as_of": 25868.6,
       "close_next": 25891.4,
       "result": "WIN"
@@ -142,6 +181,9 @@
       "ai_prediction": "UP",
       "prob_up": 55.9,
       "actual_up": 0,
+      "open_as_of": 26057.2,
+      "high_as_of": 26104.2,
+      "low_as_of": 25862.45,
       "close_as_of": 25891.4,
       "close_next": 25795.15,
       "result": "LOSS"
@@ -152,6 +194,9 @@
       "ai_prediction": "DOWN",
       "prob_up": 43.8,
       "actual_up": 1,
+      "open_as_of": 25935.1,
+      "high_as_of": 25944.15,
+      "low_as_of": 25718.2,
       "close_as_of": 25795.15,
       "close_next": 25966.05,
       "result": "LOSS"
@@ -162,6 +207,9 @@
       "ai_prediction": "UP",
       "prob_up": 55.5,
       "actual_up": 0,
+      "open_as_of": 25843.2,
+      "high_as_of": 26005.95,
+      "low_as_of": 25827.0,
       "close_as_of": 25966.05,
       "close_next": 25936.2,
       "result": "LOSS"
@@ -172,6 +220,9 @@
       "ai_prediction": "DOWN",
       "prob_up": 37.4,
       "actual_up": 1,
+      "open_as_of": 25939.95,
+      "high_as_of": 26041.7,
+      "low_as_of": 25810.05,
       "close_as_of": 25936.2,
       "close_next": 26053.9,
       "result": "LOSS"
@@ -182,6 +233,9 @@
       "ai_prediction": "DOWN",
       "prob_up": 43.2,
       "actual_up": 0,
+      "open_as_of": 25982.0,
+      "high_as_of": 26097.85,
+      "low_as_of": 25960.3,
       "close_as_of": 26053.9,
       "close_next": 25877.85,
       "result": "WIN"
@@ -192,6 +246,9 @@
       "ai_prediction": "DOWN",
       "prob_up": 39.6,
       "actual_up": 0,
+      "open_as_of": 25984.4,
+      "high_as_of": 26032.05,
+      "low_as_of": 25845.25,
       "close_as_of": 25877.85,
       "close_next": 25722.1,
       "result": "WIN"
@@ -202,6 +259,9 @@
       "ai_prediction": "DOWN",
       "prob_up": 30.2,
       "actual_up": 1,
+      "open_as_of": 25863.8,
+      "high_as_of": 25953.75,
+      "low_as_of": 25711.2,
       "close_as_of": 25722.1,
       "close_next": 25763.35,
       "result": "LOSS"
@@ -212,6 +272,9 @@
       "ai_prediction": "DOWN",
       "prob_up": 49.5,
       "actual_up": 0,
+      "open_as_of": 25696.85,
+      "high_as_of": 25803.1,
+      "low_as_of": 25645.5,
       "close_as_of": 25763.35,
       "close_next": 25597.65,
       "result": "WIN"
@@ -222,6 +285,9 @@
       "ai_prediction": "DOWN",
       "prob_up": 40.4,
       "actual_up": 0,
+      "open_as_of": 25744.75,
+      "high_as_of": 25787.4,
+      "low_as_of": 25578.4,
       "close_as_of": 25597.65,
       "close_next": 25509.7,
       "result": "WIN"
@@ -232,6 +298,9 @@
       "ai_prediction": "DOWN",
       "prob_up": 34.5,
       "actual_up": 0,
+      "open_as_of": 25593.35,
+      "high_as_of": 25679.15,
+      "low_as_of": 25491.55,
       "close_as_of": 25509.7,
       "close_next": 25492.3,
       "result": "WIN"
@@ -242,6 +311,9 @@
       "ai_prediction": "DOWN",
       "prob_up": 31.8,
       "actual_up": 1,
+      "open_as_of": 25433.8,
+      "high_as_of": 25551.25,
+      "low_as_of": 25318.45,
       "close_as_of": 25492.3,
       "close_next": 25574.35,
       "result": "LOSS"
@@ -252,6 +324,9 @@
       "ai_prediction": "DOWN",
       "prob_up": 38.9,
       "actual_up": 1,
+      "open_as_of": 25503.5,
+      "high_as_of": 25653.45,
+      "low_as_of": 25503.5,
       "close_as_of": 25574.35,
       "close_next": 25694.95,
       "result": "LOSS"
@@ -262,6 +337,9 @@
       "ai_prediction": "UP",
       "prob_up": 52.6,
       "actual_up": 1,
+      "open_as_of": 25617.0,
+      "high_as_of": 25715.8,
+      "low_as_of": 25449.25,
       "close_as_of": 25694.95,
       "close_next": 25875.8,
       "result": "WIN"
@@ -272,6 +350,9 @@
       "ai_prediction": "UP",
       "prob_up": 56.3,
       "actual_up": 1,
+      "open_as_of": 25834.3,
+      "high_as_of": 25934.55,
+      "low_as_of": 25781.15,
       "close_as_of": 25875.8,
       "close_next": 25879.15,
       "result": "WIN"
@@ -282,6 +363,9 @@
       "ai_prediction": "UP",
       "prob_up": 55.6,
       "actual_up": 1,
+      "open_as_of": 25906.1,
+      "high_as_of": 26010.7,
+      "low_as_of": 25808.4,
       "close_as_of": 25879.15,
       "close_next": 25910.05,
       "result": "WIN"
@@ -292,6 +376,9 @@
       "ai_prediction": "UP",
       "prob_up": 56.8,
       "actual_up": 1,
+      "open_as_of": 25767.9,
+      "high_as_of": 25940.2,
+      "low_as_of": 25740.8,
       "close_as_of": 25910.05,
       "close_next": 26013.45,
       "result": "WIN"
@@ -302,6 +389,9 @@
       "ai_prediction": "UP",
       "prob_up": 55.3,
       "actual_up": 0,
+      "open_as_of": 25948.2,
+      "high_as_of": 26024.2,
+      "low_as_of": 25906.35,
       "close_as_of": 26013.45,
       "close_next": 25910.05,
       "result": "LOSS"
