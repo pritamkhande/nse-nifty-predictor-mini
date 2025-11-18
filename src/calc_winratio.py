@@ -1,86 +1,157 @@
 # src/calc_winratio.py
+#
+# Rolling backtest for the last 30 trading days.
+# For each day i, we train on all data up to day i-1,
+# predict direction for day i (i.e. next day's move from day i-1 to i),
+# and compare with actual.
 
-import pandas as pd
 from pathlib import Path
 import json
 
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+
 DATA_PATH = Path("data/raw/nifty_daily.csv")
-HIST_PATH = Path("outputs/nifty_predictions_history.csv")
 OUT_PATH = Path("outputs/winratio_last_30.json")
 
 
-def main():
-    if not DATA_PATH.exists():
-        raise FileNotFoundError("nifty_daily.csv not found. Run download_nifty.py first.")
-    if not HIST_PATH.exists():
-        raise FileNotFoundError("nifty_predictions_history.csv not found. Run predict_next_day.py first.")
-
-    # Load OHLC data
-    df = pd.read_csv(DATA_PATH, parse_dates=["Date"])
+def make_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Same feature engineering as train_model.py, but kept local for backtest."""
+    df = df.copy()
     df = df.sort_values("Date").reset_index(drop=True)
+
+    # Normalise adjusted close name if present
+    df.rename(
+        columns={
+            "Adj Close": "AdjClose",
+            "Adj_Close": "AdjClose",
+        },
+        inplace=True,
+    )
 
     # Ensure numeric
     for col in ["Open", "High", "Low", "Close", "AdjClose", "Volume"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Compute next-day close and actual direction
-    df["next_close"] = df["Close"].shift(-1)
-    # Set actual_up to NaN when next_close is NaN (no next day yet)
-    df["actual_up"] = (df["next_close"] > df["Close"]).astype("float")
-    df.loc[df["next_close"].isna(), "actual_up"] = pd.NA
+    # Drop invalid rows
+    df = df.dropna(subset=["Close", "Volume"])
 
-    # Load AI predictions
-    hist = pd.read_csv(HIST_PATH)
-    hist = hist.sort_values("generated_at_utc", ascending=False).reset_index(drop=True)
+    # Features
+    df["ret_1"] = df["Close"].pct_change()
+    df["hl_range"] = (df["High"] - df["Low"]) / df["Close"].shift(1)
 
-    # Take last 30 predictions (by time)
-    hist_30 = hist.head(30).copy()
+    for win in [5, 10, 20]:
+        df[f"ma_{win}"] = df["Close"].rolling(win).mean()
+        df[f"ret_{win}"] = df["Close"].pct_change(win)
+
+    df["vol_mean_20"] = df["Volume"].rolling(20).mean()
+    df["vol_norm"] = df["Volume"] / df["vol_mean_20"]
+
+    # Target: next-day direction
+    df["target_up"] = (df["Close"].shift(-1) > df["Close"]).astype(int)
+
+    # Remove rows with NaNs from rolling / pct_change and last row (no target)
+    df = df.dropna().reset_index(drop=True)
+    df = df.iloc[:-1, :]
+
+    return df
+
+
+def main():
+    if not DATA_PATH.exists():
+        raise FileNotFoundError("nifty_daily.csv not found. Run download_nifty.py first.")
+
+    df = pd.read_csv(DATA_PATH, parse_dates=["Date"])
+    df_feat = make_features(df)
+
+    feature_cols = [
+        c
+        for c in df_feat.columns
+        if c
+        not in [
+            "Date",
+            "Open",
+            "High",
+            "Low",
+            "Close",
+            "AdjClose",
+            "Volume",
+            "vol_mean_20",
+            "target_up",
+        ]
+    ]
+
+    X_all = df_feat[feature_cols].values
+    y_all = df_feat["target_up"].values
+    dates_all = df_feat["Date"].dt.date.values
+    closes_all = df_feat["Close"].values
+
+    n = len(df_feat)
+    if n < 300:
+        raise ValueError("Not enough history to do a 30-day rolling backtest.")
+
+    # Use at least 252 days as initial training window (about 1 trading year)
+    min_train = 252
+    valid_indices = list(range(min_train, n))  # indices we COULD evaluate
+    eval_indices = valid_indices[-30:]        # only last 30 for backtest
 
     results = []
     win_count = 0
 
-    for _, row in hist_30.iterrows():
-        pred_for_str = str(row["predicted_for"])
-        try:
-            pred_for_date = pd.to_datetime(pred_for_str).date()
-        except Exception:
-            continue
+    for idx in eval_indices:
+        # Train on data strictly before idx
+        X_train = X_all[:idx, :]
+        y_train = y_all[:idx]
 
-        # Match by calendar date
-        match = df[df["Date"].dt.date == pred_for_date]
-        if match.empty:
-            # No market data (holiday or future date)
-            continue
+        X_test = X_all[idx, :].reshape(1, -1)
+        y_test = int(y_all[idx])
 
-        actual_up_val = match["actual_up"].values[0]
-        if pd.isna(actual_up_val):
-            # No next-day close yet, cannot evaluate this trade
-            continue
+        # Date i is the "as-of" date; target is move from i to i+1
+        as_of_date = dates_all[idx]
+        pred_for_date = dates_all[idx + 1]  # next trading day
+        close_as_of = float(closes_all[idx])
+        close_next = float(closes_all[idx + 1])
 
-        actual_up = int(actual_up_val)
-        ai_up = 1 if str(row["prediction"]).upper() == "UP" else 0
+        clf = RandomForestClassifier(
+            n_estimators=300,
+            max_depth=6,
+            random_state=42,
+            n_jobs=-1,
+        )
+        clf.fit(X_train, y_train)
 
-        win = (ai_up == actual_up)
+        proba_up = float(clf.predict_proba(X_test)[0, 1])
+        pred_up = 1 if proba_up >= 0.5 else 0
+
+        win = (pred_up == y_test)
         win_count += int(win)
 
-        results.append({
-            "prediction_for": pred_for_str,
-            "ai_prediction": str(row["prediction"]).upper(),
-            "prob_up": round(float(row["prob_up"]) * 100, 1),
-            "actual_up": actual_up,
-            "result": "WIN" if win else "LOSS"
-        })
+        results.append(
+            {
+                "as_of_date": as_of_date.isoformat(),
+                "predicted_for": pred_for_date.isoformat(),
+                "ai_prediction": "UP" if pred_up == 1 else "DOWN",
+                "prob_up": round(proba_up * 100.0, 1),
+                "actual_up": int(y_test),
+                "close_as_of": round(close_as_of, 2),
+                "close_next": round(close_next, 2),
+                "result": "WIN" if win else "LOSS",
+            }
+        )
 
     total = len(results)
-    win_ratio = (win_count / total * 100) if total > 0 else 0.0
+    win_ratio = (win_count / total * 100.0) if total > 0 else 0.0
 
     output = {
+        "mode": "rolling_backtest_last_30",
+        "min_train_size": min_train,
         "total_predictions": total,
         "wins": win_count,
         "loss": total - win_count,
         "win_ratio_percent": round(win_ratio, 2),
-        "details": results
+        "details": results,
     }
 
     OUT_PATH.write_text(json.dumps(output, indent=2), encoding="utf-8")
