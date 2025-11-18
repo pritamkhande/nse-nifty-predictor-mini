@@ -20,7 +20,6 @@ def format_float(x, decimals=2):
 
 
 def clean_price_data(df: pd.DataFrame) -> pd.DataFrame:
-    """Make sure price/volume columns are numeric and valid."""
     df = df.copy()
 
     df.rename(
@@ -40,16 +39,23 @@ def clean_price_data(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def load_win_ratio_summary() -> str:
-    """Return a short text like '18 / 30 (60.0%)' or 'No data yet'."""
+def load_win_ratio_json():
     if not WINR_PATH.exists():
+        return None
+    try:
+        return json.loads(WINR_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def load_win_ratio_summary() -> str:
+    data = load_win_ratio_json()
+    if not data:
         return "No data yet"
 
     try:
-        data = json.loads(WINR_PATH.read_text(encoding="utf-8"))
         total = int(data.get("total_predictions", 0))
         wins = int(data.get("wins", 0))
-        loss = int(data.get("loss", max(0, total - wins)))
         win_ratio = float(data.get("win_ratio_percent", 0.0))
     except Exception:
         return "No data yet"
@@ -97,7 +103,6 @@ def build_index():
     pred_badge_class = "up" if prediction.upper() == "UP" else "down"
 
     prob_up = float(pred["prob_up"])
-    prob_down = float(pred["prob_down"])
     prob_up_percent = round(prob_up * 100.0, 1)
 
     generated_at_utc = pred["generated_at_utc"]
@@ -188,18 +193,52 @@ def build_history():
             "</tr>"
         )
 
-    rows_str = (
+    history_rows_str = (
         "\n".join(rows_html)
         if rows_html
         else "<tr><td colspan=\"7\">No predictions yet.</td></tr>"
     )
 
+    # Build backtest table from winratio JSON
     win_ratio_summary = load_win_ratio_summary()
+    data = load_win_ratio_json()
+
+    backtest_rows_html = []
+    if data and data.get("details"):
+        for i, row in enumerate(data["details"], start=1):
+            ai_label = row["ai_prediction"]
+            actual_label = "UP" if int(row["actual_up"]) == 1 else "DOWN"
+            result_label = row["result"]
+            ai_class = "pill-up" if ai_label == "UP" else "pill-down"
+            actual_class = "pill-up" if actual_label == "UP" else "pill-down"
+            res_class = "pill-win" if result_label == "WIN" else "pill-loss"
+
+            ohlc_str = f"{row['open_as_of']}/{row['high_as_of']}/{row['low_as_of']}/{row['close_as_of']}"
+
+            backtest_rows_html.append(
+                "<tr>"
+                f"<td>{i}</td>"
+                f"<td>{html.escape(row['as_of_date'])}</td>"
+                f"<td>{html.escape(row['predicted_for'])}</td>"
+                f"<td>{ohlc_str}</td>"
+                f"<td>{row['close_next']}</td>"
+                f"<td class=\"{ai_class}\">{ai_label}</td>"
+                f"<td class=\"{actual_class}\">{actual_label}</td>"
+                f"<td class=\"{res_class}\">{result_label}</td>"
+                "</tr>"
+            )
+    else:
+        backtest_rows_html.append(
+            "<tr><td colspan=\"8\">No backtest data yet.</td></tr>"
+        )
+
+    backtest_rows_str = "\n".join(backtest_rows_html)
 
     template = (TEMPLATES_DIR / "history.html").read_text(encoding="utf-8")
     html_out = (
         template
-        .replace("{{HISTORY_ROWS}}", rows_str)
+        .replace("{{HISTORY_ROWS}}", history_rows_str)
+        .replace("{{BACKTEST_ROWS}}", backtest_rows_str)
         .replace("{{WIN_RATIO_SUMMARY}}", win_ratio_summary)
     )
 
