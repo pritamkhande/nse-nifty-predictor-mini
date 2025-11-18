@@ -38,7 +38,7 @@ WINDOW_DAYS = 30
 LAST_N_DAYS = 30
 
 # -------------------------------------------------------------------
-# Helpers to normalise column names
+# Helpers
 # -------------------------------------------------------------------
 
 def _first_existing(df, names):
@@ -49,7 +49,7 @@ def _first_existing(df, names):
 
 
 def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Rename common variations to a standard schema."""
+    """Rename common variations to a standard schema, except Actual_UP."""
     df = df.copy()
 
     # ---------------- Date column detection ----------------
@@ -61,7 +61,6 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
             if "date" in cl or "day" in cl or "time" in cl or "timestamp" in cl:
                 date_col = c
                 break
-
     if date_col is None:
         # final fallback: treat first column as Date
         date_col = df.columns[0]
@@ -102,8 +101,20 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
     else:
         df["Prob_DOWN"] = 1.0 - df["Prob_UP"]
 
-    # ---------------- Actual_UP (0/1 or UP/DOWN) ----------------
-    actual_col = _first_existing(
+    return df
+
+
+def ensure_actual_up(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ensure df has Actual_UP (0/1).
+    Priority:
+      1) Existing explicit columns: Actual_UP/Actual/Target/Direction...
+      2) Derive from Close_(t+1) > Close_t if Close exists.
+    """
+    df = df.copy()
+
+    # Explicit label columns
+    label_col = _first_existing(
         df,
         [
             "Actual_UP", "actual_up", "ACTUAL_UP",
@@ -111,26 +122,35 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
             "Label", "label", "Direction", "direction",
         ],
     )
-    if actual_col is None:
+
+    if label_col is not None:
+        series = df[label_col]
+        if series.dtype == object:
+            df["Actual_UP"] = series.astype(str).str.upper().map(
+                {"UP": 1, "DOWN": 0, "1": 1, "0": 0, "TRUE": 1, "FALSE": 0}
+            )
+        else:
+            df["Actual_UP"] = series.astype(int)
+
+        if df["Actual_UP"].isna().any():
+            raise ValueError(
+                "Could not cleanly map Actual column to 0/1. "
+                "Make sure values are UP/DOWN or 0/1."
+            )
+        return df
+
+    # Derive from price if possible
+    if "Close" not in df.columns:
         raise ValueError(
-            "No Actual_UP/Actual/Target/Direction column found to infer actual move."
+            "No Actual/Target/Direction column found, and no Close column "
+            "to derive actual move from. Cannot compute Actual_UP."
         )
 
-    series = df[actual_col]
-
-    if series.dtype == object:
-        df["Actual_UP"] = series.astype(str).str.upper().map(
-            {"UP": 1, "DOWN": 0, "1": 1, "0": 0, "TRUE": 1, "FALSE": 0}
-        )
-    else:
-        df["Actual_UP"] = series.astype(int)
-
-    if df["Actual_UP"].isna().any():
-        raise ValueError(
-            "Could not cleanly map Actual column to 0/1. "
-            "Make sure values are UP/DOWN or 0/1."
-        )
-
+    df = df.sort_values("Date").reset_index(drop=True)
+    df["Next_Close"] = df["Close"].shift(-1)
+    df["Actual_UP"] = (df["Next_Close"] > df["Close"]).astype(int)
+    # Drop last row where Next_Close is NaN (no next day price yet)
+    df = df[df["Next_Close"].notna()].reset_index(drop=True)
     return df
 
 
@@ -213,6 +233,7 @@ def main():
 
     df = pd.read_csv(INPUT_CSV)
     df = normalise_columns(df)
+    df = ensure_actual_up(df)
 
     result_df = dynamic_threshold_backtest(df, window=WINDOW_DAYS)
 
