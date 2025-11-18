@@ -83,6 +83,14 @@
       color: #f97373;
       font-weight: 600;
     }
+    .pill-win {
+      color: #22c55e;
+      font-weight: 600;
+    }
+    .pill-loss {
+      color: #f97373;
+      font-weight: 600;
+    }
     footer {
       padding: 0 1.5rem 1.5rem;
       font-size: 0.75rem;
@@ -96,7 +104,7 @@
     <div class="title">Nifty 50 – Prediction History</div>
     <div class="sub">
       All recorded AI directional signals for the Nifty 50 index.<br />
-      Last 30 trades win ratio: <strong>{{WIN_RATIO_SUMMARY}}</strong>
+      Backtest win ratio (last 30 trading days): <strong>{{WIN_RATIO_SUMMARY}}</strong>
     </div>
   </header>
 
@@ -104,7 +112,7 @@
     <a href="index.html" class="back-link">← Back to dashboard</a>
 
     <section class="card">
-      <div class="card-title">Signal Log</div>
+      <div class="card-title">Live Signal Log (workflow runs)</div>
       <table>
         <thead>
           <tr>
@@ -119,6 +127,27 @@
         </thead>
         <tbody>
           {{HISTORY_ROWS}}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <div class="card-title">Rolling Backtest – Last 30 Trading Days</div>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>As-of Date</th>
+            <th>Predicted For</th>
+            <th>O / H / L / C (As-of)</th>
+            <th>Next Close</th>
+            <th>AI Pred</th>
+            <th>Actual</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{BACKTEST_ROWS}}
         </tbody>
       </table>
     </section>
