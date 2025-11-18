@@ -1,8 +1,8 @@
 # src/calc_winratio.py
 #
 # Rolling backtest for the last 30 trading days.
-# For each day i, we train on all data up to day i-1,
-# predict direction for day i (i.e. next day's move from day i-1 to i),
+# For each evaluated index i, we train on all data up to i-1,
+# predict direction for day i (move from day i to i+1),
 # and compare with actual.
 
 from pathlib import Path
@@ -17,7 +17,7 @@ OUT_PATH = Path("outputs/winratio_last_30.json")
 
 
 def make_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Same feature engineering as train_model.py, but kept local for backtest."""
+    """Same feature engineering as in train_model.py, for backtest."""
     df = df.copy()
     df = df.sort_values("Date").reset_index(drop=True)
 
@@ -52,9 +52,8 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
     # Target: next-day direction
     df["target_up"] = (df["Close"].shift(-1) > df["Close"]).astype(int)
 
-    # Remove rows with NaNs from rolling / pct_change and last row (no target)
+    # Remove rows with NaNs from rolling / pct_change; the last row has NaN target
     df = df.dropna().reset_index(drop=True)
-    df = df.iloc[:-1, :]
 
     return df
 
@@ -92,10 +91,17 @@ def main():
     if n < 300:
         raise ValueError("Not enough history to do a 30-day rolling backtest.")
 
-    # Use at least 252 days as initial training window (about 1 trading year)
+    # At least ~1 year for training
     min_train = 252
-    valid_indices = list(range(min_train, n))  # indices we COULD evaluate
-    eval_indices = valid_indices[-30:]        # only last 30 for backtest
+
+    # We must stop at n-2 so that idx+1 is within [0, n-1]
+    last_valid_idx = n - 2
+    if last_valid_idx <= min_train:
+        raise ValueError("Not enough data after training window to backtest.")
+
+    valid_indices = list(range(min_train, last_valid_idx + 1))
+    # Take up to last 30 indices
+    eval_indices = valid_indices[-30:]
 
     results = []
     win_count = 0
@@ -108,9 +114,9 @@ def main():
         X_test = X_all[idx, :].reshape(1, -1)
         y_test = int(y_all[idx])
 
-        # Date i is the "as-of" date; target is move from i to i+1
+        # as_of_date is date[idx]; prediction is for move to date[idx+1]
         as_of_date = dates_all[idx]
-        pred_for_date = dates_all[idx + 1]  # next trading day
+        pred_for_date = dates_all[idx + 1]
         close_as_of = float(closes_all[idx])
         close_next = float(closes_all[idx + 1])
 
