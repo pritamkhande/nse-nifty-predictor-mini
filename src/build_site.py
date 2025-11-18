@@ -215,6 +215,9 @@ def build_history():
 
             ohlc_str = f"{row['open_as_of']}/{row['high_as_of']}/{row['low_as_of']}/{row['close_as_of']}"
 
+            prob_up = float(row.get("prob_up", 0.0))
+            prob_down = float(row.get("prob_down", 100.0 - prob_up))
+
             backtest_rows_html.append(
                 "<tr>"
                 f"<td>{i}</td>"
@@ -222,6 +225,8 @@ def build_history():
                 f"<td>{html.escape(row['predicted_for'])}</td>"
                 f"<td>{ohlc_str}</td>"
                 f"<td>{row['close_next']}</td>"
+                f"<td>{prob_up:.1f}%</td>"
+                f"<td>{prob_down:.1f}%</td>"
                 f"<td class=\"{ai_class}\">{ai_label}</td>"
                 f"<td class=\"{actual_class}\">{actual_label}</td>"
                 f"<td class=\"{res_class}\">{result_label}</td>"
@@ -229,7 +234,7 @@ def build_history():
             )
     else:
         backtest_rows_html.append(
-            "<tr><td colspan=\"8\">No backtest data yet.</td></tr>"
+            "<tr><td colspan=\"10\">No backtest data yet.</td></tr>"
         )
 
     backtest_rows_str = "\n".join(backtest_rows_html)
