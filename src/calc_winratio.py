@@ -1,12 +1,18 @@
 # src/calc_winratio.py
 #
 # Rolling backtest using GradientBoosting and Close-only features.
-# 1) Runs a rolling prediction over many trading days (no future leak).
-# 2) Tunes (THRESH, SEPARATION) grid to maximize win% with a minimum number of trades.
-# 3) Using the best thresholds, computes summary for the LAST 30 TRADING DAYS.
-# 4) Saves:
-#    - winratio_last_30.json for the website
-#    - best_thresholds.json for live prediction.
+# Optimised to run quickly on GitHub Actions:
+#   - Uses a sliding 252-day training window (1 trading year).
+#   - Only evaluates on the last 600 trading days (max).
+#   - Uses a smaller model (200 trees) for backtest.
+#
+# Steps:
+#   1) Run rolling backtest over recent history, recording probabilities + actuals.
+#   2) Tune (THRESH, SEPARATION) grid to maximise win% with minimum trades.
+#   3) Using best thresholds, compute summary for LAST 30 TRADING DAYS.
+#   4) Save:
+#        - outputs/winratio_last_30.json  (for website)
+#        - outputs/best_thresholds.json   (used by predict_next_day.py)
 
 from pathlib import Path
 import json
@@ -24,6 +30,10 @@ FEATURE_COLS = ["ret_1", "ret_5", "ret_10", "ret_20", "ma_5", "ma_10", "ma_20"]
 THRESH_GRID = [0.60, 0.65, 0.70, 0.75]
 SEP_GRID = [0.10, 0.15, 0.20, 0.25]
 MIN_TRADES_FOR_TUNING = 30  # require at least this many trades on full history
+
+# Performance parameters
+TRAIN_WINDOW = 252       # days in each training window (approx 1 trading year)
+MAX_EVAL_DAYS = 600      # evaluate at most this many days (≈ last 2–3 years)
 
 
 def classify_with_confidence(prob_up: float, thresh: float, separation: float) -> str:
@@ -70,7 +80,10 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def compute_backtest_records(df_feat: pd.DataFrame):
-    """Run rolling backtest and store probabilities + actuals for each evaluated day."""
+    """
+    Run rolling backtest with sliding 252-day training window.
+    Only evaluate the last MAX_EVAL_DAYS days for speed.
+    """
     X_all = df_feat[FEATURE_COLS].values
     y_all = df_feat["target_up"].values
     dates_all = df_feat["Date"].dt.date.values
@@ -81,25 +94,37 @@ def compute_backtest_records(df_feat: pd.DataFrame):
     close_all = df_feat["Close"].values
 
     n = len(df_feat)
-    if n < 300:
-        raise ValueError("Not enough history to do a rolling backtest (need >= 300 rows).")
+    if n < TRAIN_WINDOW + 50:
+        raise ValueError(
+            f"Not enough history to do a rolling backtest (need >= {TRAIN_WINDOW + 50} rows)."
+        )
 
-    min_train = 252  # ~1 trading year
-    last_valid_idx = n - 2  # will access idx+1 for next-day move
+    # We will evaluate indices from start_eval_idx up to n-2 (because we look at idx+1).
+    first_possible_idx = TRAIN_WINDOW
+    last_eval_idx = n - 2  # idx+1 must exist
 
-    if last_valid_idx <= min_train:
-        raise ValueError("Not enough data after training window to backtest.")
+    # Limit to last MAX_EVAL_DAYS evaluation points
+    if last_eval_idx - first_possible_idx + 1 > MAX_EVAL_DAYS:
+        start_eval_idx = last_eval_idx - MAX_EVAL_DAYS + 1
+        if start_eval_idx < first_possible_idx:
+            start_eval_idx = first_possible_idx
+    else:
+        start_eval_idx = first_possible_idx
 
-    valid_indices = list(range(min_train, last_valid_idx + 1))
+    valid_indices = list(range(start_eval_idx, last_eval_idx + 1))
 
     records = []
 
     for idx in valid_indices:
-        X_train = X_all[:idx, :]
-        y_train = y_all[:idx]
+        # Sliding window: train only on the last TRAIN_WINDOW days before idx
+        train_start = idx - TRAIN_WINDOW
+        train_end = idx  # not included
+
+        X_train = X_all[train_start:train_end, :]
+        y_train = y_all[train_start:train_end]
 
         X_test = X_all[idx, :].reshape(1, -1)
-        y_test = int(y_all[idx])  # 1 = UP, 0 = DOWN
+        y_test = int(y_all[idx])
 
         as_of_date = dates_all[idx]
         pred_for_date = dates_all[idx + 1]
@@ -111,7 +136,7 @@ def compute_backtest_records(df_feat: pd.DataFrame):
         c_next = float(close_all[idx + 1])
 
         clf = GradientBoostingClassifier(
-            n_estimators=400,
+            n_estimators=200,      # reduced for speed
             learning_rate=0.05,
             max_depth=3,
             random_state=42,
@@ -126,8 +151,8 @@ def compute_backtest_records(df_feat: pd.DataFrame):
             {
                 "as_of_date": as_of_date.isoformat(),
                 "predicted_for": pred_for_date.isoformat(),
-                "prob_up": prob_up_pct,        # as percentage for display
-                "prob_down": prob_down_pct,    # as percentage
+                "prob_up": prob_up_pct,        # percentage for display
+                "prob_down": prob_down_pct,
                 "actual_up": int(y_test),      # 1 = market UP next day, 0 = DOWN
                 "open_as_of": round(o_asof, 2),
                 "high_as_of": round(h_asof, 2),
@@ -137,7 +162,7 @@ def compute_backtest_records(df_feat: pd.DataFrame):
             }
         )
 
-    return records, min_train
+    return records, TRAIN_WINDOW
 
 
 def tune_thresholds(records):
@@ -151,7 +176,7 @@ def tune_thresholds(records):
             trades = 0
 
             for r in records:
-                prob_up = r["prob_up"] / 100.0  # convert percentage to 0–1
+                prob_up = r["prob_up"] / 100.0  # percentage -> 0–1
                 label = classify_with_confidence(prob_up, thresh, sep)
 
                 if label in ("UP", "DOWN"):
@@ -198,11 +223,11 @@ def main():
     records, min_train = compute_backtest_records(df_feat)
     total_rec = len(records)
 
-    # ---- 1) Threshold tuning on ALL available records ----
+    # ---- 1) Threshold tuning on all backtest records ----
     best_params = tune_thresholds(records)
 
     if best_params is None:
-        # Fallback: default strict settings, but still compute stats on all records
+        # Fallback: default strict settings
         default_thresh = 0.70
         default_sep = 0.20
         wins = losses = trades = 0
@@ -236,7 +261,7 @@ def main():
     BEST_THRESH_PATH.write_text(json.dumps(best_params, indent=2), encoding="utf-8")
 
     # ---- 2) Last 30 trading days summary using tuned thresholds ----
-    # records are already in chronological order (due to index loop)
+    # records are chronological; take last 30
     records_last30 = records[-30:]
     wins30 = losses30 = trades30 = 0
     details_last30 = []
@@ -287,7 +312,8 @@ def main():
     output = {
         "mode": "rolling_backtest_last_30",
         "feature_set": FEATURE_COLS,
-        "min_train_size": min_train,
+        "train_window": TRAIN_WINDOW,
+        "max_eval_days": MAX_EVAL_DAYS,
         "total_records_used_for_tuning": total_rec,
         "tuned_thresholds": best_params,
         "min_trades_for_tuning": MIN_TRADES_FOR_TUNING,
