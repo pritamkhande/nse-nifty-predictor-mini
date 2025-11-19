@@ -1,7 +1,7 @@
 # src/train_model.py
 #
 # Train RandomForest model for Nifty 50 direction (next-day up/down)
-# using price-based features only (no volume features).
+# using only Close-based features (no dependence on Volume / High / Low).
 
 from pathlib import Path
 import json
@@ -21,11 +21,11 @@ MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 def make_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Feature engineering: price-based features only."""
+    """Feature engineering: Close-only features (returns, moving averages)."""
     df = df.copy()
     df = df.sort_values("Date").reset_index(drop=True)
 
-    # Normalize adjusted close name if present
+    # normalise adjusted close if present
     df.rename(
         columns={
             "Adj Close": "AdjClose",
@@ -34,31 +34,32 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
         inplace=True,
     )
 
-    # Ensure numeric
-    for col in ["Open", "High", "Low", "Close", "AdjClose", "Volume"]:
+    # ensure numeric for price columns (if they exist)
+    for col in ["Open", "High", "Low", "Close", "AdjClose"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Require valid Close only
+    # require valid Close only
     df = df.dropna(subset=["Close"])
 
-    # --- Features (all price-based) ---
+    # if Open/High/Low missing, approximate by Close (for later display/backtest)
+    for col in ["Open", "High", "Low"]:
+        if col in df.columns:
+            df[col] = df[col].fillna(df["Close"])
+
+    # -------- features (Close-based only) --------
     df["ret_1"] = df["Close"].pct_change()
-    df["hl_range"] = (df["High"] - df["Low"]) / df["Close"].shift(1)
 
     for win in [5, 10, 20]:
         df[f"ma_{win}"] = df["Close"].rolling(win).mean()
         df[f"ret_{win}"] = df["Close"].pct_change(win)
 
-    # Target: next-day direction
+    # target: next-day direction
     df["target_up"] = (df["Close"].shift(-1) > df["Close"]).astype(int)
 
-    # Drop rows with any NaNs from rolling / pct_change
-    df = df.dropna().reset_index(drop=True)
-
-    # Last row has target referring to next day which may not exist; drop it
-    if len(df) > 0:
-        df = df.iloc[:-1, :].reset_index(drop=True)
+    # drop rows with NaNs in features or target
+    feature_cols = ["ret_1", "ma_5", "ma_10", "ma_20", "ret_5", "ret_10", "ret_20", "target_up"]
+    df = df.dropna(subset=feature_cols).reset_index(drop=True)
 
     return df
 
@@ -76,11 +77,11 @@ def train_model():
     if n_samples == 0:
         raise ValueError(
             "After feature engineering there are 0 rows.\n"
-            "Check that nifty_daily.csv has valid 'Date', 'Open', 'High', 'Low', 'Close' columns "
+            "Check that nifty_daily.csv has valid 'Date' and 'Close' columns "
             "and enough history (at least ~30-40 trading days)."
         )
 
-    # Define input features (exclude raw price columns and target)
+    # input features (exclude raw prices and target)
     feature_cols = [
         c
         for c in df_feat.columns
@@ -100,9 +101,8 @@ def train_model():
     X = df_feat[feature_cols].values
     y = df_feat["target_up"].values
 
-    # Time-aware split: first 80% train, last 20% test (no shuffle)
+    # time-aware split: first 80% train, last 20% test
     if n_samples < 20:
-        # Very small dataset: train on all, no test
         X_train, y_train = X, y
         X_test, y_test = None, None
     else:
@@ -121,14 +121,12 @@ def train_model():
     )
     clf.fit(X_train, y_train)
 
-    # Evaluate
     train_acc = float(clf.score(X_train, y_train))
     if X_test is not None:
         test_acc = float(clf.score(X_test, y_test))
     else:
         test_acc = None
 
-    # Save model + feature list
     bundle = {
         "model": clf,
         "feature_cols": feature_cols,
