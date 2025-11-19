@@ -1,0 +1,9 @@
+{
+  "thresh": 0.75,
+  "separation": 0.25,
+  "wins": 134,
+  "loss": 122,
+  "trades": 256,
+  "win_ratio_percent": 52.34,
+  "fallback": false
+}
