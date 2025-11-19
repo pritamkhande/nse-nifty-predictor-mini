@@ -1,7 +1,7 @@
 # src/calc_winratio.py
 #
 # Rolling backtest for the last 30 trading days.
-# Uses Close-only features (same as train_model.py).
+# Uses Close-only features with the same fixed FEATURE_COLS as training.
 
 from pathlib import Path
 import json
@@ -14,6 +14,8 @@ OUT_PATH = Path("outputs/winratio_last_30.json")
 
 THRESH = 0.70
 SEPARATION = 0.20
+
+FEATURE_COLS = ["ret_1", "ret_5", "ret_10", "ret_20", "ma_5", "ma_10", "ma_20"]
 
 
 def classify_with_confidence(prob_up: float) -> str:
@@ -44,7 +46,7 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.dropna(subset=["Close"])
 
-    # approximate OHLC if missing (for reporting)
+    # approximate OHLC if missing, for reporting
     for col in ["Open", "High", "Low"]:
         if col in df.columns:
             df[col] = df[col].fillna(df["Close"])
@@ -57,8 +59,7 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
 
     df["target_up"] = (df["Close"].shift(-1) > df["Close"]).astype(int)
 
-    feature_cols = ["ret_1", "ma_5", "ma_10", "ma_20", "ret_5", "ret_10", "ret_20", "target_up"]
-    df = df.dropna(subset=feature_cols).reset_index(drop=True)
+    df = df.dropna(subset=FEATURE_COLS + ["target_up"]).reset_index(drop=True)
 
     return df
 
@@ -70,23 +71,7 @@ def main():
     df = pd.read_csv(DATA_PATH, parse_dates=["Date"])
     df_feat = make_features(df)
 
-    feature_cols = [
-        c
-        for c in df_feat.columns
-        if c
-        not in [
-            "Date",
-            "Open",
-            "High",
-            "Low",
-            "Close",
-            "AdjClose",
-            "Volume",
-            "target_up",
-        ]
-    ]
-
-    X_all = df_feat[feature_cols].values
+    X_all = df_feat[FEATURE_COLS].values
     y_all = df_feat["target_up"].values
     dates_all = df_feat["Date"].dt.date.values
 
