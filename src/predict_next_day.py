@@ -15,6 +15,26 @@ HIST_CSV_PATH = OUTPUT_DIR / "nifty_predictions_history.csv"
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+# --------- signal filter (Option C) ----------
+THRESH = 0.70      # min probability for UP/DOWN
+SEPARATION = 0.20  # min gap between prob_up and prob_down
+
+
+def classify_with_confidence(prob_up: float) -> str:
+    """Return 'UP', 'DOWN' or 'NO TRADE' based on high-confidence rule."""
+    prob_down = 1.0 - prob_up
+
+    # Strong UP: high prob_up and clearly above prob_down
+    if prob_up >= THRESH and (prob_up - prob_down) >= SEPARATION:
+        return "UP"
+
+    # Strong DOWN: high prob_down and clearly above prob_up
+    if prob_down >= THRESH and (prob_down - prob_up) >= SEPARATION:
+        return "DOWN"
+
+    # Otherwise: low-confidence, skip trade
+    return "NO TRADE"
+
 
 def make_features_for_latest(df: pd.DataFrame, feature_cols):
     df = df.copy()
@@ -76,10 +96,11 @@ def main():
     X_latest, last_data_date = make_features_for_latest(df, feature_cols)
 
     proba_up = float(model.predict_proba(X_latest)[0, 1])
-    pred_label = "UP" if proba_up >= 0.5 else "DOWN"
+    proba_down = float(1.0 - proba_up)
+
+    pred_label = classify_with_confidence(proba_up)
 
     predicted_for = next_weekday(last_data_date + dt.timedelta(days=1))
-
     now_utc = dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
     result = {
@@ -88,22 +109,22 @@ def main():
         "generated_at_utc": now_utc,
         "last_data_date": last_data_date.isoformat(),
         "predicted_for": predicted_for.isoformat(),
-        "prediction": pred_label,
+        "prediction": pred_label,          # 'UP' / 'DOWN' / 'NO TRADE'
         "prob_up": proba_up,
-        "prob_down": float(1.0 - proba_up),
+        "prob_down": proba_down,
     }
 
     with open(PRED_JSON_PATH, "w") as f:
         json.dump(result, f, indent=2)
 
-    # Row for history
+    # Row for live history (we keep NO TRADE also)
     row = {
         "generated_at_utc": now_utc,
         "last_data_date": last_data_date.isoformat(),
         "predicted_for": predicted_for.isoformat(),
         "prediction": pred_label,
         "prob_up": proba_up,
-        "prob_down": 1.0 - proba_up,
+        "prob_down": proba_down,
     }
 
     # Keep at most one row per (last_data_date, predicted_for)
