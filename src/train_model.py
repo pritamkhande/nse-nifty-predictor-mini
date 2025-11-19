@@ -1,6 +1,6 @@
 # src/train_model.py
 #
-# Train RandomForest model for Nifty 50 direction (next-day up/down)
+# Train GradientBoosting model for Nifty 50 direction (next-day up/down)
 # using a fixed set of Close-based features.
 
 from pathlib import Path
@@ -8,17 +8,18 @@ import json
 
 import pandas as pd
 import joblib
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import train_test_split
 
 DATA_PATH = Path("data/raw/nifty_daily.csv")
-MODEL_PATH = Path("models/nifty_rf_model.pkl")
+MODEL_PATH = Path("models/nifty_rf_model.pkl")  # keep same filename for compatibility
 OUTPUT_DIR = Path("outputs")
 REPORT_PATH = OUTPUT_DIR / "model_report.json"
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
 
+# Fixed feature set used everywhere (train, predict, backtest)
 FEATURE_COLS = ["ret_1", "ret_5", "ret_10", "ret_20", "ma_5", "ma_10", "ma_20"]
 
 
@@ -29,10 +30,7 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # Normalise adjusted close if present
     df.rename(
-        columns={
-            "Adj Close": "AdjClose",
-            "Adj_Close": "AdjClose",
-        },
+        columns={"Adj Close": "AdjClose", "Adj_Close": "AdjClose"},
         inplace=True,
     )
 
@@ -44,7 +42,7 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
     # Require valid Close only
     df = df.dropna(subset=["Close"])
 
-    # Optional: approximate missing OHLC by Close (useful for reporting elsewhere)
+    # Optional: approximate missing OHLC by Close (useful for reporting)
     for col in ["Open", "High", "Low"]:
         if col in df.columns:
             df[col] = df[col].fillna(df["Close"])
@@ -97,11 +95,12 @@ def train_model():
             shuffle=False,
         )
 
-    clf = RandomForestClassifier(
-        n_estimators=300,
-        max_depth=6,
+    # Gradient Boosting: sequential trees that focus on previous errors
+    clf = GradientBoostingClassifier(
+        n_estimators=400,
+        learning_rate=0.05,
+        max_depth=3,
         random_state=42,
-        n_jobs=-1,
     )
     clf.fit(X_train, y_train)
 
@@ -113,7 +112,7 @@ def train_model():
 
     bundle = {
         "model": clf,
-        "feature_cols": FEATURE_COLS,  # saved for reference, but fixed
+        "feature_cols": FEATURE_COLS,  # saved for reference
     }
     joblib.dump(bundle, MODEL_PATH)
 
@@ -125,7 +124,7 @@ def train_model():
     }
     REPORT_PATH.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
-    print(f"Trained RandomForest on {n_samples} samples, {len(FEATURE_COLS)} features.")
+    print(f"Trained GradientBoosting on {n_samples} samples, {len(FEATURE_COLS)} features.")
     print(f"Train accuracy: {train_acc:.4f}")
     if test_acc is not None:
         print(f"Test accuracy:  {test_acc:.4f}")
