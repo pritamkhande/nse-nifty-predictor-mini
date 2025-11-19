@@ -1,7 +1,8 @@
 # src/predict_next_day.py
 #
 # Live T+1 prediction for Nifty 50 using Close-only features.
-# Features are computed directly for the last day from the last 20 closes.
+# Features are computed directly for the last day from the last 20 closes,
+# using the same fixed FEATURE_COLS as in train_model.py.
 
 import json
 from pathlib import Path
@@ -21,6 +22,8 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 THRESH = 0.70
 SEPARATION = 0.20
 
+FEATURE_COLS = ["ret_1", "ret_5", "ret_10", "ret_20", "ma_5", "ma_10", "ma_20"]
+
 
 def classify_with_confidence(prob_up: float) -> str:
     prob_down = 1.0 - prob_up
@@ -32,7 +35,7 @@ def classify_with_confidence(prob_up: float) -> str:
     return "NO TRADE"
 
 
-def make_features_for_latest(df: pd.DataFrame, feature_cols):
+def make_features_for_latest(df: pd.DataFrame):
     """
     Build feature vector for the *last* available trading day using Close-only features.
     This mirrors the features from train_model.py but only for the final row.
@@ -49,12 +52,11 @@ def make_features_for_latest(df: pd.DataFrame, feature_cols):
         inplace=True,
     )
 
-    # Ensure numeric
-    for col in ["Close"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+    # Ensure numeric Close
+    if "Close" not in df.columns:
+        raise ValueError("nifty_daily.csv must contain a 'Close' column.")
 
-    # Require valid Close
+    df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
     df = df.dropna(subset=["Close"])
     if df.empty:
         raise ValueError("No valid Close prices available to build features.")
@@ -66,10 +68,6 @@ def make_features_for_latest(df: pd.DataFrame, feature_cols):
         )
 
     closes = df["Close"].values
-    n = len(closes)
-
-    # Last day index t = n-1
-    c_t = float(closes[-1])
 
     # Returns
     ret_1 = (closes[-1] / closes[-2]) - 1.0
@@ -82,7 +80,6 @@ def make_features_for_latest(df: pd.DataFrame, feature_cols):
     ma_10 = float(closes[-10:].mean())
     ma_20 = float(closes[-20:].mean())
 
-    # Map of all available features
     feat_dict = {
         "ret_1": ret_1,
         "ret_5": ret_5,
@@ -93,17 +90,11 @@ def make_features_for_latest(df: pd.DataFrame, feature_cols):
         "ma_20": ma_20,
     }
 
-    # Build feature vector in the same order as training
-    try:
-        x_vec = [feat_dict[name] for name in feature_cols]
-    except KeyError as e:
-        raise KeyError(
-            f"Feature {e.args[0]} not found in feat_dict. "
-            f"Training feature_cols must match predict-time features."
-        )
+    x_vec = [feat_dict[name] for name in FEATURE_COLS]
 
     latest_date = pd.to_datetime(df.iloc[-1]["Date"]).date()
-    return pd.np.array(x_vec, dtype="float64").reshape(1, -1), latest_date
+    import numpy as np
+    return np.array(x_vec, dtype="float64").reshape(1, -1), latest_date
 
 
 def next_weekday(d: dt.date) -> dt.date:
@@ -120,10 +111,9 @@ def main():
 
     df = pd.read_csv(DATA_PATH, parse_dates=["Date"])
     bundle = joblib.load(MODEL_PATH)
-    model = bundle["model"]
-    feature_cols = bundle["feature_cols"]
+    model = bundle["model"]  # we ignore any stored feature_cols; we use fixed FEATURE_COLS
 
-    X_latest, last_data_date = make_features_for_latest(df, feature_cols)
+    X_latest, last_data_date = make_features_for_latest(df)
 
     proba_up = float(model.predict_proba(X_latest)[0, 1])
     proba_down = float(1.0 - proba_up)
