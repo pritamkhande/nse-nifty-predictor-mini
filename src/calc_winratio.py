@@ -1,11 +1,7 @@
 # src/calc_winratio.py
 #
 # Rolling backtest for the last 30 trading days.
-# For each evaluated index i, we train on all data up to i-1,
-# predict direction for move from day i to i+1,
-# apply high-confidence filter (Option C),
-# and compare with the actual next-day move.
-# Stores OHLC, probabilities and Win/Loss/No Trade for each of those 30 days.
+# Uses price-based features only (no volume features).
 
 from pathlib import Path
 import json
@@ -16,8 +12,8 @@ from sklearn.ensemble import RandomForestClassifier
 DATA_PATH = Path("data/raw/nifty_daily.csv")
 OUT_PATH = Path("outputs/winratio_last_30.json")
 
-THRESH = 0.70      # same as live
-SEPARATION = 0.20  # same as live
+THRESH = 0.70
+SEPARATION = 0.20
 
 
 def classify_with_confidence(prob_up: float) -> str:
@@ -46,17 +42,15 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    df = df.dropna(subset=["Close", "Volume"])
+    df = df.dropna(subset=["Close"])
 
+    # Price-based features
     df["ret_1"] = df["Close"].pct_change()
     df["hl_range"] = (df["High"] - df["Low"]) / df["Close"].shift(1)
 
     for win in [5, 10, 20]:
         df[f"ma_{win}"] = df["Close"].rolling(win).mean()
         df[f"ret_{win}"] = df["Close"].pct_change(win)
-
-    df["vol_mean_20"] = df["Volume"].rolling(20).mean()
-    df["vol_norm"] = df["Volume"] / df["vol_mean_20"]
 
     df["target_up"] = (df["Close"].shift(-1) > df["Close"]).astype(int)
 
@@ -84,7 +78,6 @@ def main():
             "Close",
             "AdjClose",
             "Volume",
-            "vol_mean_20",
             "target_up",
         ]
     ]
@@ -164,7 +157,7 @@ def main():
                 "ai_prediction": ai_label,
                 "prob_up": proba_up_pct,
                 "prob_down": proba_down_pct,
-                "actual_up": int(y_test),  # 1 = market went UP, 0 = DOWN
+                "actual_up": int(y_test),
                 "open_as_of": round(o_asof, 2),
                 "high_as_of": round(h_asof, 2),
                 "low_as_of": round(l_asof, 2),
@@ -174,8 +167,8 @@ def main():
             }
         )
 
-    total_predictions = len(results)          # usually 30
-    trades = trade_count                      # only UP/DOWN
+    total_predictions = len(results)
+    trades = trade_count
     if trades > 0:
         win_ratio = win_count / trades * 100.0
     else:
