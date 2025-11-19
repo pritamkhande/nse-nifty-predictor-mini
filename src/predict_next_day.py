@@ -1,13 +1,13 @@
 # src/predict_next_day.py
 #
-# Live T+1 prediction for Nifty 50 using Close-only features.
-# Features are computed directly for the last day from the last 20 closes,
-# using the same fixed FEATURE_COLS as in train_model.py.
+# Live T+1 prediction for Nifty 50 using Close-only features and GradientBoosting.
+# Uses best (THRESH, SEPARATION) tuned by calc_winratio.py, if available.
 
 import json
 from pathlib import Path
 import datetime as dt
 
+import numpy as np
 import pandas as pd
 import joblib
 
@@ -16,21 +16,38 @@ MODEL_PATH = Path("models") / "nifty_rf_model.pkl"
 OUTPUT_DIR = Path("outputs")
 PRED_JSON_PATH = OUTPUT_DIR / "nifty_prediction.json"
 HIST_CSV_PATH = OUTPUT_DIR / "nifty_predictions_history.csv"
+BEST_THRESH_PATH = OUTPUT_DIR / "best_thresholds.json"
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-THRESH = 0.70
-SEPARATION = 0.20
-
+# Same feature set as training / backtest
 FEATURE_COLS = ["ret_1", "ret_5", "ret_10", "ret_20", "ma_5", "ma_10", "ma_20"]
 
+# Default thresholds if tuning file not available
+DEFAULT_THRESH = 0.70
+DEFAULT_SEPARATION = 0.20
 
-def classify_with_confidence(prob_up: float) -> str:
+
+def load_thresholds():
+    """Load tuned thresholds from best_thresholds.json, or return defaults."""
+    if BEST_THRESH_PATH.exists():
+        try:
+            d = json.loads(BEST_THRESH_PATH.read_text(encoding="utf-8"))
+            thresh = float(d.get("thresh", DEFAULT_THRESH))
+            sep = float(d.get("separation", DEFAULT_SEPARATION))
+            return thresh, sep
+        except Exception:
+            return DEFAULT_THRESH, DEFAULT_SEPARATION
+    else:
+        return DEFAULT_THRESH, DEFAULT_SEPARATION
+
+
+def classify_with_confidence(prob_up: float, thresh: float, separation: float) -> str:
     prob_down = 1.0 - prob_up
 
-    if prob_up >= THRESH and (prob_up - prob_down) >= SEPARATION:
+    if prob_up >= thresh and (prob_up - prob_down) >= separation:
         return "UP"
-    if prob_down >= THRESH and (prob_down - prob_up) >= SEPARATION:
+    if prob_down >= thresh and (prob_down - prob_up) >= separation:
         return "DOWN"
     return "NO TRADE"
 
@@ -38,21 +55,16 @@ def classify_with_confidence(prob_up: float) -> str:
 def make_features_for_latest(df: pd.DataFrame):
     """
     Build feature vector for the *last* available trading day using Close-only features.
-    This mirrors the features from train_model.py but only for the final row.
+    Uses the same definitions as in train_model.py.
     """
     df = df.copy()
     df = df.sort_values("Date").reset_index(drop=True)
 
-    # Normalise adjusted close if present
     df.rename(
-        columns={
-            "Adj Close": "AdjClose",
-            "Adj_Close": "AdjClose",
-        },
+        columns={"Adj Close": "AdjClose", "Adj_Close": "AdjClose"},
         inplace=True,
     )
 
-    # Ensure numeric Close
     if "Close" not in df.columns:
         raise ValueError("nifty_daily.csv must contain a 'Close' column.")
 
@@ -93,7 +105,6 @@ def make_features_for_latest(df: pd.DataFrame):
     x_vec = [feat_dict[name] for name in FEATURE_COLS]
 
     latest_date = pd.to_datetime(df.iloc[-1]["Date"]).date()
-    import numpy as np
     return np.array(x_vec, dtype="float64").reshape(1, -1), latest_date
 
 
@@ -111,14 +122,16 @@ def main():
 
     df = pd.read_csv(DATA_PATH, parse_dates=["Date"])
     bundle = joblib.load(MODEL_PATH)
-    model = bundle["model"]  # we ignore any stored feature_cols; we use fixed FEATURE_COLS
+    model = bundle["model"]
 
     X_latest, last_data_date = make_features_for_latest(df)
 
-    proba_up = float(model.predict_proba(X_latest)[0, 1])
-    proba_down = float(1.0 - proba_up)
+    prob_up = float(model.predict_proba(X_latest)[0, 1])
+    prob_down = float(1.0 - prob_up)
 
-    pred_label = classify_with_confidence(proba_up)
+    # Load tuned thresholds
+    thresh, sep = load_thresholds()
+    pred_label = classify_with_confidence(prob_up, thresh, sep)
 
     predicted_for = next_weekday(last_data_date + dt.timedelta(days=1))
     now_utc = dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
@@ -130,8 +143,12 @@ def main():
         "last_data_date": last_data_date.isoformat(),
         "predicted_for": predicted_for.isoformat(),
         "prediction": pred_label,
-        "prob_up": proba_up,
-        "prob_down": proba_down,
+        "prob_up": prob_up,
+        "prob_down": prob_down,
+        "threshold_used": {
+            "thresh": thresh,
+            "separation": sep,
+        },
     }
 
     with open(PRED_JSON_PATH, "w") as f:
@@ -142,8 +159,8 @@ def main():
         "last_data_date": last_data_date.isoformat(),
         "predicted_for": predicted_for.isoformat(),
         "prediction": pred_label,
-        "prob_up": proba_up,
-        "prob_down": proba_down,
+        "prob_up": prob_up,
+        "prob_down": prob_down,
     }
 
     if HIST_CSV_PATH.exists():
