@@ -1,7 +1,7 @@
 # src/train_model.py
 #
 # Train RandomForest model for Nifty 50 direction (next-day up/down)
-# using the same feature engineering as calc_winratio.py.
+# using price-based features only (no volume features).
 
 from pathlib import Path
 import json
@@ -21,7 +21,7 @@ MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 def make_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Feature engineering: must match calc_winratio.py logic."""
+    """Feature engineering: price-based features only."""
     df = df.copy()
     df = df.sort_values("Date").reset_index(drop=True)
 
@@ -39,10 +39,10 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Keep rows with valid Close; Volume may be zero but not NaN
+    # Require valid Close only
     df = df.dropna(subset=["Close"])
 
-    # Features
+    # --- Features (all price-based) ---
     df["ret_1"] = df["Close"].pct_change()
     df["hl_range"] = (df["High"] - df["Low"]) / df["Close"].shift(1)
 
@@ -50,13 +50,10 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
         df[f"ma_{win}"] = df["Close"].rolling(win).mean()
         df[f"ret_{win}"] = df["Close"].pct_change(win)
 
-    df["vol_mean_20"] = df["Volume"].rolling(20).mean()
-    df["vol_norm"] = df["Volume"] / df["vol_mean_20"]
-
     # Target: next-day direction
     df["target_up"] = (df["Close"].shift(-1) > df["Close"]).astype(int)
 
-    # Drop rows with NaNs from rolling/pct_change/vol_mean_20
+    # Drop rows with any NaNs from rolling / pct_change
     df = df.dropna().reset_index(drop=True)
 
     # Last row has target referring to next day which may not exist; drop it
@@ -79,8 +76,8 @@ def train_model():
     if n_samples == 0:
         raise ValueError(
             "After feature engineering there are 0 rows.\n"
-            "Check that nifty_daily.csv has valid 'Date', 'Open', 'High', 'Low', "
-            "'Close', 'Volume' columns and enough history."
+            "Check that nifty_daily.csv has valid 'Date', 'Open', 'High', 'Low', 'Close' columns "
+            "and enough history (at least ~30-40 trading days)."
         )
 
     # Define input features (exclude raw price columns and target)
@@ -96,7 +93,6 @@ def train_model():
             "Close",
             "AdjClose",
             "Volume",
-            "vol_mean_20",
             "target_up",
         ]
     ]
