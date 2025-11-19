@@ -1,6 +1,6 @@
 # src/predict_next_day.py
 #
-# Live T+1 prediction for Nifty 50 using price-based features only.
+# Live T+1 prediction for Nifty 50 using Close-only features.
 
 import json
 from pathlib import Path
@@ -43,21 +43,40 @@ def make_features_for_latest(df: pd.DataFrame, feature_cols):
         inplace=True,
     )
 
-    for col in ["Open", "High", "Low", "Close", "AdjClose", "Volume"]:
+    for col in ["Open", "High", "Low", "Close", "AdjClose"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
     df = df.dropna(subset=["Close"])
 
-    # Price-based features
-    df["ret_1"] = df["Close"].pct_change()
-    df["hl_range"] = (df["High"] - df["Low"]) / df["Close"].shift(1)
+    # approximate OHLC if missing (not strictly needed here but consistent)
+    for col in ["Open", "High", "Low"]:
+        if col in df.columns:
+            df[col] = df[col].fillna(df["Close"])
 
+    # Close-only features
+    df["ret_1"] = df["Close"].pct_change()
     for win in [5, 10, 20]:
         df[f"ma_{win}"] = df["Close"].rolling(win).mean()
         df[f"ret_{win}"] = df["Close"].pct_change(win)
 
-    df = df.dropna().reset_index(drop=True)
+    feature_cols_all = [
+        c
+        for c in df.columns
+        if c
+        not in [
+            "Date",
+            "Open",
+            "High",
+            "Low",
+            "Close",
+            "AdjClose",
+            "Volume",
+            "target_up",
+        ]
+    ]
+
+    df = df.dropna(subset=feature_cols_all).reset_index(drop=True)
 
     if df.empty:
         raise ValueError("Not enough valid rows after cleaning to build features.")
