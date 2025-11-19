@@ -3,8 +3,9 @@
 # Rolling backtest for the last 30 trading days.
 # For each evaluated index i, we train on all data up to i-1,
 # predict direction for move from day i to i+1,
+# apply high-confidence filter (Option C),
 # and compare with the actual next-day move.
-# Stores OHLC, probabilities and Win/Loss for each of those 30 trades.
+# Stores OHLC, probabilities and Win/Loss/No Trade for each of those 30 days.
 
 from pathlib import Path
 import json
@@ -14,6 +15,19 @@ from sklearn.ensemble import RandomForestClassifier
 
 DATA_PATH = Path("data/raw/nifty_daily.csv")
 OUT_PATH = Path("outputs/winratio_last_30.json")
+
+THRESH = 0.70      # same as live
+SEPARATION = 0.20  # same as live
+
+
+def classify_with_confidence(prob_up: float) -> str:
+    prob_down = 1.0 - prob_up
+
+    if prob_up >= THRESH and (prob_up - prob_down) >= SEPARATION:
+        return "UP"
+    if prob_down >= THRESH and (prob_down - prob_up) >= SEPARATION:
+        return "DOWN"
+    return "NO TRADE"
 
 
 def make_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -98,14 +112,16 @@ def main():
 
     results = []
     win_count = 0
+    loss_count = 0
+    trade_count = 0
 
     for idx in eval_indices:
-        # train on up to idx-1 (strictly past)
+        # train on strictly past data
         X_train = X_all[:idx, :]
         y_train = y_all[:idx]
 
         X_test = X_all[idx, :].reshape(1, -1)
-        y_test = int(y_all[idx])
+        y_test = int(y_all[idx])  # 1 = UP, 0 = DOWN
 
         as_of_date = dates_all[idx]
         pred_for_date = dates_all[idx + 1]
@@ -127,16 +143,25 @@ def main():
         proba_up = float(clf.predict_proba(X_test)[0, 1])
         proba_up_pct = round(proba_up * 100.0, 1)
         proba_down_pct = round(100.0 - proba_up_pct, 1)
-        pred_up = 1 if proba_up >= 0.5 else 0
 
-        win = (pred_up == y_test)
-        win_count += int(win)
+        ai_label = classify_with_confidence(proba_up)
+
+        if ai_label in ("UP", "DOWN"):
+            trade_count += 1
+            if (ai_label == "UP" and y_test == 1) or (ai_label == "DOWN" and y_test == 0):
+                result_label = "WIN"
+                win_count += 1
+            else:
+                result_label = "LOSS"
+                loss_count += 1
+        else:
+            result_label = "NO TRADE"
 
         results.append(
             {
                 "as_of_date": as_of_date.isoformat(),
                 "predicted_for": pred_for_date.isoformat(),
-                "ai_prediction": "UP" if pred_up == 1 else "DOWN",
+                "ai_prediction": ai_label,
                 "prob_up": proba_up_pct,
                 "prob_down": proba_down_pct,
                 "actual_up": int(y_test),  # 1 = market went UP, 0 = DOWN
@@ -145,19 +170,25 @@ def main():
                 "low_as_of": round(l_asof, 2),
                 "close_as_of": round(c_asof, 2),
                 "close_next": round(c_next, 2),
-                "result": "WIN" if win else "LOSS",
+                "result": result_label,
             }
         )
 
-    total = len(results)
-    win_ratio = (win_count / total * 100.0) if total > 0 else 0.0
+    total_predictions = len(results)          # usually 30
+    trades = trade_count                      # only UP/DOWN
+    if trades > 0:
+        win_ratio = win_count / trades * 100.0
+    else:
+        win_ratio = 0.0
 
     output = {
         "mode": "rolling_backtest_last_30",
         "min_train_size": min_train,
-        "total_predictions": total,
+        "total_predictions": total_predictions,
+        "effective_trades": trades,
         "wins": win_count,
-        "loss": total - win_count,
+        "loss": loss_count,
+        "no_trade": total_predictions - trades,
         "win_ratio_percent": round(win_ratio, 2),
         "details": results,
     }
