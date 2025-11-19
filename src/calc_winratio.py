@@ -1,7 +1,7 @@
 # src/calc_winratio.py
 #
 # Rolling backtest for the last 30 trading days.
-# Uses price-based features only (no volume features).
+# Uses Close-only features (same as train_model.py).
 
 from pathlib import Path
 import json
@@ -38,23 +38,27 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
         inplace=True,
     )
 
-    for col in ["Open", "High", "Low", "Close", "AdjClose", "Volume"]:
+    for col in ["Open", "High", "Low", "Close", "AdjClose"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
     df = df.dropna(subset=["Close"])
 
-    # Price-based features
-    df["ret_1"] = df["Close"].pct_change()
-    df["hl_range"] = (df["High"] - df["Low"]) / df["Close"].shift(1)
+    # approximate OHLC if missing (for reporting)
+    for col in ["Open", "High", "Low"]:
+        if col in df.columns:
+            df[col] = df[col].fillna(df["Close"])
 
+    # Close-only features
+    df["ret_1"] = df["Close"].pct_change()
     for win in [5, 10, 20]:
         df[f"ma_{win}"] = df["Close"].rolling(win).mean()
         df[f"ret_{win}"] = df["Close"].pct_change(win)
 
     df["target_up"] = (df["Close"].shift(-1) > df["Close"]).astype(int)
 
-    df = df.dropna().reset_index(drop=True)
+    feature_cols = ["ret_1", "ma_5", "ma_10", "ma_20", "ret_5", "ret_10", "ret_20", "target_up"]
+    df = df.dropna(subset=feature_cols).reset_index(drop=True)
 
     return df
 
@@ -86,9 +90,9 @@ def main():
     y_all = df_feat["target_up"].values
     dates_all = df_feat["Date"].dt.date.values
 
-    open_all = df_feat["Open"].values
-    high_all = df_feat["High"].values
-    low_all = df_feat["Low"].values
+    open_all = df_feat.get("Open", df_feat["Close"]).values
+    high_all = df_feat.get("High", df_feat["Close"]).values
+    low_all = df_feat.get("Low", df_feat["Close"]).values
     close_all = df_feat["Close"].values
 
     n = len(df_feat)
@@ -109,7 +113,6 @@ def main():
     trade_count = 0
 
     for idx in eval_indices:
-        # train on strictly past data
         X_train = X_all[:idx, :]
         y_train = y_all[:idx]
 
