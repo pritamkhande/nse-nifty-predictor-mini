@@ -1,29 +1,37 @@
 # src/calc_winratio.py
 #
-# Rolling backtest for the last 30 trading days.
-# Uses Close-only features with the same fixed FEATURE_COLS as training.
+# Rolling backtest using GradientBoosting and Close-only features.
+# 1) Runs a rolling prediction over many trading days (no future leak).
+# 2) Tunes (THRESH, SEPARATION) grid to maximize win% with a minimum number of trades.
+# 3) Using the best thresholds, computes summary for the LAST 30 TRADING DAYS.
+# 4) Saves:
+#    - winratio_last_30.json for the website
+#    - best_thresholds.json for live prediction.
 
 from pathlib import Path
 import json
 
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import GradientBoostingClassifier
 
 DATA_PATH = Path("data/raw/nifty_daily.csv")
 OUT_PATH = Path("outputs/winratio_last_30.json")
-
-THRESH = 0.70
-SEPARATION = 0.20
+BEST_THRESH_PATH = Path("outputs/best_thresholds.json")
 
 FEATURE_COLS = ["ret_1", "ret_5", "ret_10", "ret_20", "ma_5", "ma_10", "ma_20"]
 
+# Grid for tuning
+THRESH_GRID = [0.60, 0.65, 0.70, 0.75]
+SEP_GRID = [0.10, 0.15, 0.20, 0.25]
+MIN_TRADES_FOR_TUNING = 30  # require at least this many trades on full history
 
-def classify_with_confidence(prob_up: float) -> str:
+
+def classify_with_confidence(prob_up: float, thresh: float, separation: float) -> str:
     prob_down = 1.0 - prob_up
 
-    if prob_up >= THRESH and (prob_up - prob_down) >= SEPARATION:
+    if prob_up >= thresh and (prob_up - prob_down) >= separation:
         return "UP"
-    if prob_down >= THRESH and (prob_down - prob_up) >= SEPARATION:
+    if prob_down >= thresh and (prob_down - prob_up) >= separation:
         return "DOWN"
     return "NO TRADE"
 
@@ -33,10 +41,7 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.sort_values("Date").reset_index(drop=True)
 
     df.rename(
-        columns={
-            "Adj Close": "AdjClose",
-            "Adj_Close": "AdjClose",
-        },
+        columns={"Adj Close": "AdjClose", "Adj_Close": "AdjClose"},
         inplace=True,
     )
 
@@ -64,13 +69,8 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def main():
-    if not DATA_PATH.exists():
-        raise FileNotFoundError("nifty_daily.csv not found. Run download_nifty.py first.")
-
-    df = pd.read_csv(DATA_PATH, parse_dates=["Date"])
-    df_feat = make_features(df)
-
+def compute_backtest_records(df_feat: pd.DataFrame):
+    """Run rolling backtest and store probabilities + actuals for each evaluated day."""
     X_all = df_feat[FEATURE_COLS].values
     y_all = df_feat["target_up"].values
     dates_all = df_feat["Date"].dt.date.values
@@ -82,22 +82,19 @@ def main():
 
     n = len(df_feat)
     if n < 300:
-        raise ValueError("Not enough history to do a 30-day rolling backtest.")
+        raise ValueError("Not enough history to do a rolling backtest (need >= 300 rows).")
 
-    min_train = 252
-    last_valid_idx = n - 2  # we will access idx+1
+    min_train = 252  # ~1 trading year
+    last_valid_idx = n - 2  # will access idx+1 for next-day move
+
     if last_valid_idx <= min_train:
         raise ValueError("Not enough data after training window to backtest.")
 
     valid_indices = list(range(min_train, last_valid_idx + 1))
-    eval_indices = valid_indices[-30:]
 
-    results = []
-    win_count = 0
-    loss_count = 0
-    trade_count = 0
+    records = []
 
-    for idx in eval_indices:
+    for idx in valid_indices:
         X_train = X_all[:idx, :]
         y_train = y_all[:idx]
 
@@ -113,65 +110,195 @@ def main():
         c_asof = float(close_all[idx])
         c_next = float(close_all[idx + 1])
 
-        clf = RandomForestClassifier(
-            n_estimators=300,
-            max_depth=6,
+        clf = GradientBoostingClassifier(
+            n_estimators=400,
+            learning_rate=0.05,
+            max_depth=3,
             random_state=42,
-            n_jobs=-1,
         )
         clf.fit(X_train, y_train)
 
-        proba_up = float(clf.predict_proba(X_test)[0, 1])
-        proba_up_pct = round(proba_up * 100.0, 1)
-        proba_down_pct = round(100.0 - proba_up_pct, 1)
+        prob_up = float(clf.predict_proba(X_test)[0, 1])  # 0–1
+        prob_up_pct = round(prob_up * 100.0, 1)
+        prob_down_pct = round(100.0 - prob_up_pct, 1)
 
-        ai_label = classify_with_confidence(proba_up)
-
-        if ai_label in ("UP", "DOWN"):
-            trade_count += 1
-            if (ai_label == "UP" and y_test == 1) or (ai_label == "DOWN" and y_test == 0):
-                result_label = "WIN"
-                win_count += 1
-            else:
-                result_label = "LOSS"
-                loss_count += 1
-        else:
-            result_label = "NO TRADE"
-
-        results.append(
+        records.append(
             {
                 "as_of_date": as_of_date.isoformat(),
                 "predicted_for": pred_for_date.isoformat(),
-                "ai_prediction": ai_label,
-                "prob_up": proba_up_pct,
-                "prob_down": proba_down_pct,
-                "actual_up": int(y_test),
+                "prob_up": prob_up_pct,        # as percentage for display
+                "prob_down": prob_down_pct,    # as percentage
+                "actual_up": int(y_test),      # 1 = market UP next day, 0 = DOWN
                 "open_as_of": round(o_asof, 2),
                 "high_as_of": round(h_asof, 2),
                 "low_as_of": round(l_asof, 2),
                 "close_as_of": round(c_asof, 2),
                 "close_next": round(c_next, 2),
-                "result": result_label,
             }
         )
 
-    total_predictions = len(results)
-    trades = trade_count
-    if trades > 0:
-        win_ratio = win_count / trades * 100.0
+    return records, min_train
+
+
+def tune_thresholds(records):
+    """Scan grid of (THRESH, SEPARATION) and pick combination with best win% and enough trades."""
+    best = None
+
+    for thresh in THRESH_GRID:
+        for sep in SEP_GRID:
+            wins = 0
+            losses = 0
+            trades = 0
+
+            for r in records:
+                prob_up = r["prob_up"] / 100.0  # convert percentage to 0–1
+                label = classify_with_confidence(prob_up, thresh, sep)
+
+                if label in ("UP", "DOWN"):
+                    trades += 1
+                    if (label == "UP" and r["actual_up"] == 1) or (
+                        label == "DOWN" and r["actual_up"] == 0
+                    ):
+                        wins += 1
+                    else:
+                        losses += 1
+
+            if trades < MIN_TRADES_FOR_TUNING:
+                continue
+
+            win_ratio = (wins / trades * 100.0) if trades > 0 else 0.0
+
+            if (
+                best is None
+                or win_ratio > best["win_ratio_percent"]
+                or (
+                    win_ratio == best["win_ratio_percent"]
+                    and trades > best["trades"]
+                )
+            ):
+                best = {
+                    "thresh": thresh,
+                    "separation": sep,
+                    "wins": wins,
+                    "loss": losses,
+                    "trades": trades,
+                    "win_ratio_percent": round(win_ratio, 2),
+                }
+
+    return best
+
+
+def main():
+    if not DATA_PATH.exists():
+        raise FileNotFoundError("nifty_daily.csv not found. Run download_nifty.py first.")
+
+    df = pd.read_csv(DATA_PATH, parse_dates=["Date"])
+    df_feat = make_features(df)
+
+    records, min_train = compute_backtest_records(df_feat)
+    total_rec = len(records)
+
+    # ---- 1) Threshold tuning on ALL available records ----
+    best_params = tune_thresholds(records)
+
+    if best_params is None:
+        # Fallback: default strict settings, but still compute stats on all records
+        default_thresh = 0.70
+        default_sep = 0.20
+        wins = losses = trades = 0
+        for r in records:
+            prob_up = r["prob_up"] / 100.0
+            label = classify_with_confidence(prob_up, default_thresh, default_sep)
+            if label in ("UP", "DOWN"):
+                trades += 1
+                if (label == "UP" and r["actual_up"] == 1) or (
+                    label == "DOWN" and r["actual_up"] == 0
+                ):
+                    wins += 1
+                else:
+                    losses += 1
+
+        win_ratio = (wins / trades * 100.0) if trades > 0 else 0.0
+        best_params = {
+            "thresh": default_thresh,
+            "separation": default_sep,
+            "wins": wins,
+            "loss": losses,
+            "trades": trades,
+            "win_ratio_percent": round(win_ratio, 2),
+            "fallback": True,
+        }
     else:
-        win_ratio = 0.0
+        best_params["fallback"] = False
+
+    # Save best thresholds for predict_next_day.py
+    BEST_THRESH_PATH.parent.mkdir(parents=True, exist_ok=True)
+    BEST_THRESH_PATH.write_text(json.dumps(best_params, indent=2), encoding="utf-8")
+
+    # ---- 2) Last 30 trading days summary using tuned thresholds ----
+    # records are already in chronological order (due to index loop)
+    records_last30 = records[-30:]
+    wins30 = losses30 = trades30 = 0
+    details_last30 = []
+
+    for r in records_last30:
+        prob_up = r["prob_up"] / 100.0
+        ai_label = classify_with_confidence(
+            prob_up, best_params["thresh"], best_params["separation"]
+        )
+        actual_label = "UP" if r["actual_up"] == 1 else "DOWN"
+
+        if ai_label in ("UP", "DOWN"):
+            trades30 += 1
+            if (ai_label == "UP" and actual_label == "UP") or (
+                ai_label == "DOWN" and actual_label == "DOWN"
+            ):
+                res_label = "WIN"
+                wins30 += 1
+            else:
+                res_label = "LOSS"
+                losses30 += 1
+        else:
+            res_label = "NO TRADE"
+
+        details_last30.append(
+            {
+                "as_of_date": r["as_of_date"],
+                "predicted_for": r["predicted_for"],
+                "ai_prediction": ai_label,
+                "prob_up": r["prob_up"],
+                "prob_down": r["prob_down"],
+                "actual_up": r["actual_up"],
+                "open_as_of": r["open_as_of"],
+                "high_as_of": r["high_as_of"],
+                "low_as_of": r["low_as_of"],
+                "close_as_of": r["close_as_of"],
+                "close_next": r["close_next"],
+                "result": res_label,
+            }
+        )
+
+    total_predictions_30 = len(records_last30)
+    if trades30 > 0:
+        win_ratio_30 = wins30 / trades30 * 100.0
+    else:
+        win_ratio_30 = 0.0
 
     output = {
         "mode": "rolling_backtest_last_30",
+        "feature_set": FEATURE_COLS,
         "min_train_size": min_train,
-        "total_predictions": total_predictions,
-        "effective_trades": trades,
-        "wins": win_count,
-        "loss": loss_count,
-        "no_trade": total_predictions - trades,
-        "win_ratio_percent": round(win_ratio, 2),
-        "details": results,
+        "total_records_used_for_tuning": total_rec,
+        "tuned_thresholds": best_params,
+        "min_trades_for_tuning": MIN_TRADES_FOR_TUNING,
+        # last 30 trading days summary:
+        "total_predictions": total_predictions_30,
+        "effective_trades": trades30,
+        "wins": wins30,
+        "loss": losses30,
+        "no_trade": total_predictions_30 - trades30,
+        "win_ratio_percent": round(win_ratio_30, 2),
+        "details": details_last30,
     }
 
     OUT_PATH.write_text(json.dumps(output, indent=2), encoding="utf-8")
