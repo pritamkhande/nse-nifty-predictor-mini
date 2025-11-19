@@ -1,7 +1,7 @@
 # src/train_model.py
 #
 # Train RandomForest model for Nifty 50 direction (next-day up/down)
-# using only Close-based features (no dependence on Volume / High / Low).
+# using a fixed set of Close-based features.
 
 from pathlib import Path
 import json
@@ -19,13 +19,15 @@ REPORT_PATH = OUTPUT_DIR / "model_report.json"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
 
+FEATURE_COLS = ["ret_1", "ret_5", "ret_10", "ret_20", "ma_5", "ma_10", "ma_20"]
+
 
 def make_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Feature engineering: Close-only features (returns, moving averages)."""
+    """Feature engineering: Close-only, fixed feature set."""
     df = df.copy()
     df = df.sort_values("Date").reset_index(drop=True)
 
-    # normalise adjusted close if present
+    # Normalise adjusted close if present
     df.rename(
         columns={
             "Adj Close": "AdjClose",
@@ -34,32 +36,31 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
         inplace=True,
     )
 
-    # ensure numeric for price columns (if they exist)
+    # Ensure numeric for price columns
     for col in ["Open", "High", "Low", "Close", "AdjClose"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # require valid Close only
+    # Require valid Close only
     df = df.dropna(subset=["Close"])
 
-    # if Open/High/Low missing, approximate by Close (for later display/backtest)
+    # Optional: approximate missing OHLC by Close (useful for reporting elsewhere)
     for col in ["Open", "High", "Low"]:
         if col in df.columns:
             df[col] = df[col].fillna(df["Close"])
 
-    # -------- features (Close-based only) --------
+    # Close-only features
     df["ret_1"] = df["Close"].pct_change()
 
     for win in [5, 10, 20]:
         df[f"ma_{win}"] = df["Close"].rolling(win).mean()
         df[f"ret_{win}"] = df["Close"].pct_change(win)
 
-    # target: next-day direction
+    # Target: next-day direction
     df["target_up"] = (df["Close"].shift(-1) > df["Close"]).astype(int)
 
-    # drop rows with NaNs in features or target
-    feature_cols = ["ret_1", "ma_5", "ma_10", "ma_20", "ret_5", "ret_10", "ret_20", "target_up"]
-    df = df.dropna(subset=feature_cols).reset_index(drop=True)
+    # Drop rows with NaNs in any feature or target
+    df = df.dropna(subset=FEATURE_COLS + ["target_up"]).reset_index(drop=True)
 
     return df
 
@@ -81,27 +82,10 @@ def train_model():
             "and enough history (at least ~30-40 trading days)."
         )
 
-    # input features (exclude raw prices and target)
-    feature_cols = [
-        c
-        for c in df_feat.columns
-        if c
-        not in [
-            "Date",
-            "Open",
-            "High",
-            "Low",
-            "Close",
-            "AdjClose",
-            "Volume",
-            "target_up",
-        ]
-    ]
-
-    X = df_feat[feature_cols].values
+    X = df_feat[FEATURE_COLS].values
     y = df_feat["target_up"].values
 
-    # time-aware split: first 80% train, last 20% test
+    # Time-aware split: first 80% train, last 20% test
     if n_samples < 20:
         X_train, y_train = X, y
         X_test, y_test = None, None
@@ -129,19 +113,19 @@ def train_model():
 
     bundle = {
         "model": clf,
-        "feature_cols": feature_cols,
+        "feature_cols": FEATURE_COLS,  # saved for reference, but fixed
     }
     joblib.dump(bundle, MODEL_PATH)
 
     report = {
         "n_samples": int(n_samples),
-        "n_features": len(feature_cols),
+        "n_features": len(FEATURE_COLS),
         "train_accuracy": train_acc,
         "test_accuracy": test_acc,
     }
     REPORT_PATH.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
-    print(f"Trained RandomForest on {n_samples} samples, {len(feature_cols)} features.")
+    print(f"Trained RandomForest on {n_samples} samples, {len(FEATURE_COLS)} features.")
     print(f"Train accuracy: {train_acc:.4f}")
     if test_acc is not None:
         print(f"Test accuracy:  {test_acc:.4f}")
