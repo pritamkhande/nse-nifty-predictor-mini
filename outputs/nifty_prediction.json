@@ -1,14 +1,14 @@
 {
   "symbol": "^NSEI",
   "name": "Nifty 50 Index",
-  "generated_at_utc": "2025-11-19T09:32:49Z",
+  "generated_at_utc": "2025-11-19T11:57:34Z",
   "last_data_date": "2025-11-18",
   "predicted_for": "2025-11-19",
   "prediction": "DOWN",
   "prob_up": 0.13179586058953047,
   "prob_down": 0.8682041394104696,
   "threshold_used": {
-    "thresh": 0.7,
-    "separation": 0.2
+    "thresh": 0.75,
+    "separation": 0.25
   }
 }
