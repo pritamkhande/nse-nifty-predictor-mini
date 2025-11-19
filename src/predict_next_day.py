@@ -1,6 +1,7 @@
 # src/predict_next_day.py
 #
 # Live T+1 prediction for Nifty 50 using Close-only features.
+# Features are computed directly for the last day from the last 20 closes.
 
 import json
 from pathlib import Path
@@ -32,9 +33,14 @@ def classify_with_confidence(prob_up: float) -> str:
 
 
 def make_features_for_latest(df: pd.DataFrame, feature_cols):
+    """
+    Build feature vector for the *last* available trading day using Close-only features.
+    This mirrors the features from train_model.py but only for the final row.
+    """
     df = df.copy()
     df = df.sort_values("Date").reset_index(drop=True)
 
+    # Normalise adjusted close if present
     df.rename(
         columns={
             "Adj Close": "AdjClose",
@@ -43,49 +49,61 @@ def make_features_for_latest(df: pd.DataFrame, feature_cols):
         inplace=True,
     )
 
-    for col in ["Open", "High", "Low", "Close", "AdjClose"]:
+    # Ensure numeric
+    for col in ["Close"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
+    # Require valid Close
     df = df.dropna(subset=["Close"])
-
-    # approximate OHLC if missing (not strictly needed here but consistent)
-    for col in ["Open", "High", "Low"]:
-        if col in df.columns:
-            df[col] = df[col].fillna(df["Close"])
-
-    # Close-only features
-    df["ret_1"] = df["Close"].pct_change()
-    for win in [5, 10, 20]:
-        df[f"ma_{win}"] = df["Close"].rolling(win).mean()
-        df[f"ret_{win}"] = df["Close"].pct_change(win)
-
-    feature_cols_all = [
-        c
-        for c in df.columns
-        if c
-        not in [
-            "Date",
-            "Open",
-            "High",
-            "Low",
-            "Close",
-            "AdjClose",
-            "Volume",
-            "target_up",
-        ]
-    ]
-
-    df = df.dropna(subset=feature_cols_all).reset_index(drop=True)
-
     if df.empty:
-        raise ValueError("Not enough valid rows after cleaning to build features.")
+        raise ValueError("No valid Close prices available to build features.")
 
-    latest_row = df.iloc[-1]
-    latest_features = latest_row[feature_cols].values.reshape(1, -1)
-    latest_date = latest_row["Date"]
+    # Need at least 21 days to compute ret_20 and ma_20
+    if len(df) < 21:
+        raise ValueError(
+            f"Need at least 21 trading days to compute features, found only {len(df)}."
+        )
 
-    return latest_features, pd.to_datetime(latest_date).date()
+    closes = df["Close"].values
+    n = len(closes)
+
+    # Last day index t = n-1
+    c_t = float(closes[-1])
+
+    # Returns
+    ret_1 = (closes[-1] / closes[-2]) - 1.0
+    ret_5 = (closes[-1] / closes[-6]) - 1.0
+    ret_10 = (closes[-1] / closes[-11]) - 1.0
+    ret_20 = (closes[-1] / closes[-21]) - 1.0
+
+    # Moving averages
+    ma_5 = float(closes[-5:].mean())
+    ma_10 = float(closes[-10:].mean())
+    ma_20 = float(closes[-20:].mean())
+
+    # Map of all available features
+    feat_dict = {
+        "ret_1": ret_1,
+        "ret_5": ret_5,
+        "ret_10": ret_10,
+        "ret_20": ret_20,
+        "ma_5": ma_5,
+        "ma_10": ma_10,
+        "ma_20": ma_20,
+    }
+
+    # Build feature vector in the same order as training
+    try:
+        x_vec = [feat_dict[name] for name in feature_cols]
+    except KeyError as e:
+        raise KeyError(
+            f"Feature {e.args[0]} not found in feat_dict. "
+            f"Training feature_cols must match predict-time features."
+        )
+
+    latest_date = pd.to_datetime(df.iloc[-1]["Date"]).date()
+    return pd.np.array(x_vec, dtype="float64").reshape(1, -1), latest_date
 
 
 def next_weekday(d: dt.date) -> dt.date:
