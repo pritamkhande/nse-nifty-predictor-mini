@@ -1,4 +1,6 @@
 # src/predict_next_day.py
+#
+# Live T+1 prediction for Nifty 50 using price-based features only.
 
 import json
 from pathlib import Path
@@ -15,24 +17,17 @@ HIST_CSV_PATH = OUTPUT_DIR / "nifty_predictions_history.csv"
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# --------- signal filter (Option C) ----------
-THRESH = 0.70      # min probability for UP/DOWN
-SEPARATION = 0.20  # min gap between prob_up and prob_down
+THRESH = 0.70
+SEPARATION = 0.20
 
 
 def classify_with_confidence(prob_up: float) -> str:
-    """Return 'UP', 'DOWN' or 'NO TRADE' based on high-confidence rule."""
     prob_down = 1.0 - prob_up
 
-    # Strong UP: high prob_up and clearly above prob_down
     if prob_up >= THRESH and (prob_up - prob_down) >= SEPARATION:
         return "UP"
-
-    # Strong DOWN: high prob_down and clearly above prob_up
     if prob_down >= THRESH and (prob_down - prob_up) >= SEPARATION:
         return "DOWN"
-
-    # Otherwise: low-confidence, skip trade
     return "NO TRADE"
 
 
@@ -52,17 +47,15 @@ def make_features_for_latest(df: pd.DataFrame, feature_cols):
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    df = df.dropna(subset=["Close", "Volume"])
+    df = df.dropna(subset=["Close"])
 
+    # Price-based features
     df["ret_1"] = df["Close"].pct_change()
     df["hl_range"] = (df["High"] - df["Low"]) / df["Close"].shift(1)
 
     for win in [5, 10, 20]:
         df[f"ma_{win}"] = df["Close"].rolling(win).mean()
         df[f"ret_{win}"] = df["Close"].pct_change(win)
-
-    df["vol_mean_20"] = df["Volume"].rolling(20).mean()
-    df["vol_norm"] = df["Volume"] / df["vol_mean_20"]
 
     df = df.dropna().reset_index(drop=True)
 
@@ -109,7 +102,7 @@ def main():
         "generated_at_utc": now_utc,
         "last_data_date": last_data_date.isoformat(),
         "predicted_for": predicted_for.isoformat(),
-        "prediction": pred_label,          # 'UP' / 'DOWN' / 'NO TRADE'
+        "prediction": pred_label,
         "prob_up": proba_up,
         "prob_down": proba_down,
     }
@@ -117,7 +110,6 @@ def main():
     with open(PRED_JSON_PATH, "w") as f:
         json.dump(result, f, indent=2)
 
-    # Row for live history (we keep NO TRADE also)
     row = {
         "generated_at_utc": now_utc,
         "last_data_date": last_data_date.isoformat(),
@@ -127,7 +119,6 @@ def main():
         "prob_down": proba_down,
     }
 
-    # Keep at most one row per (last_data_date, predicted_for)
     if HIST_CSV_PATH.exists():
         hist_df = pd.read_csv(HIST_CSV_PATH)
         mask = ~(
