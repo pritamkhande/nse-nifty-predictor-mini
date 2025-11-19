@@ -51,19 +51,19 @@ def load_win_ratio_json():
 def load_win_ratio_summary() -> str:
     data = load_win_ratio_json()
     if not data:
-        return "No data yet"
+        return "No high-confidence trades yet"
 
     try:
-        total = int(data.get("total_predictions", 0))
+        trades = int(data.get("effective_trades", data.get("total_predictions", 0)))
         wins = int(data.get("wins", 0))
         win_ratio = float(data.get("win_ratio_percent", 0.0))
     except Exception:
-        return "No data yet"
+        return "No high-confidence trades yet"
 
-    if total == 0:
-        return "No data yet"
+    if trades == 0:
+        return "No high-confidence trades yet"
 
-    return f"{wins} / {total} ({win_ratio:.2f}%)"
+    return f"{wins} / {trades} ({win_ratio:.2f}%)"
 
 
 def build_index():
@@ -99,8 +99,13 @@ def build_index():
     with open(PRED_JSON_PATH, "r") as f:
         pred = json.load(f)
 
-    prediction = pred["prediction"]
-    pred_badge_class = "up" if prediction.upper() == "UP" else "down"
+    prediction = str(pred["prediction"]).upper()
+    if prediction == "UP":
+        pred_badge_class = "up"
+    elif prediction == "DOWN":
+        pred_badge_class = "down"
+    else:
+        pred_badge_class = "neutral"
 
     prob_up = float(pred["prob_up"])
     prob_up_percent = round(prob_up * 100.0, 1)
@@ -122,7 +127,13 @@ def build_index():
     recent_rows_html = []
     for _, row in recent.iterrows():
         label = str(row["prediction"]).upper()
-        pill_class = "pill-up" if label == "UP" else "pill-down"
+        if label == "UP":
+            pill_class = "pill-up"
+        elif label == "DOWN":
+            pill_class = "pill-down"
+        else:
+            pill_class = "pill-neutral"
+
         prob_up_r = round(float(row["prob_up"]) * 100.0, 1)
         prob_down_r = round(float(row["prob_down"]) * 100.0, 1)
         recent_rows_html.append(
@@ -151,7 +162,7 @@ def build_index():
         .replace("{{LAST_DATE}}", last_date.isoformat())
         .replace("{{CHANGE_TEXT}}", change_text)
         .replace("{{CHANGE_CLASS}}", change_class)
-        .replace("{{PREDICTION}}", prediction.upper())
+        .replace("{{PREDICTION}}", prediction)
         .replace("{{PRED_BADGE_CLASS}}", pred_badge_class)
         .replace("{{PROB_UP_PERCENT}}", str(prob_up_percent))
         .replace("{{GENERATED_AT_UTC}}", generated_at_utc)
@@ -177,7 +188,13 @@ def build_history():
     rows_html = []
     for idx, row in hist_df.iterrows():
         label = str(row["prediction"]).upper()
-        pill_class = "pill-up" if label == "UP" else "pill-down"
+        if label == "UP":
+            pill_class = "pill-up"
+        elif label == "DOWN":
+            pill_class = "pill-down"
+        else:
+            pill_class = "pill-neutral"
+
         prob_up_r = round(float(row["prob_up"]) * 100.0, 1)
         prob_down_r = round(float(row["prob_down"]) * 100.0, 1)
 
@@ -209,9 +226,25 @@ def build_history():
             ai_label = row["ai_prediction"]
             actual_label = "UP" if int(row["actual_up"]) == 1 else "DOWN"
             result_label = row["result"]
-            ai_class = "pill-up" if ai_label == "UP" else "pill-down"
-            actual_class = "pill-up" if actual_label == "UP" else "pill-down"
-            res_class = "pill-win" if result_label == "WIN" else "pill-loss"
+
+            if ai_label == "UP":
+                ai_class = "pill-up"
+            elif ai_label == "DOWN":
+                ai_class = "pill-down"
+            else:
+                ai_class = "pill-neutral"
+
+            if actual_label == "UP":
+                actual_class = "pill-up"
+            else:
+                actual_class = "pill-down"
+
+            if result_label == "WIN":
+                res_class = "pill-win"
+            elif result_label == "LOSS":
+                res_class = "pill-loss"
+            else:
+                res_class = "pill-neutral"
 
             ohlc_str = f"{row['open_as_of']}/{row['high_as_of']}/{row['low_as_of']}/{row['close_as_of']}"
 
