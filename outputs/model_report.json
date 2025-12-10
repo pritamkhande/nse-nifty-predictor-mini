@@ -1,6 +1,6 @@
 {
   "n_samples": 4437,
   "n_features": 7,
-  "train_accuracy": 0.7559876021414483,
+  "train_accuracy": 0.7576782192166808,
   "test_accuracy": 0.4774774774774775
 }

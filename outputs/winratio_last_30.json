@@ -13,21 +13,21 @@
   "max_eval_days": 600,
   "total_records_used_for_tuning": 600,
   "tuned_thresholds": {
-    "thresh": 0.75,
+    "thresh": 0.6,
     "separation": 0.25,
-    "wins": 134,
-    "loss": 122,
-    "trades": 256,
-    "win_ratio_percent": 52.34,
+    "wins": 229,
+    "loss": 206,
+    "trades": 435,
+    "win_ratio_percent": 52.64,
     "fallback": false
   },
   "min_trades_for_tuning": 30,
   "total_predictions": 30,
-  "effective_trades": 16,
-  "wins": 8,
-  "loss": 8,
-  "no_trade": 14,
-  "win_ratio_percent": 50.0,
+  "effective_trades": 20,
+  "wins": 9,
+  "loss": 11,
+  "no_trade": 10,
+  "win_ratio_percent": 45.0,
   "details": [
     {
       "as_of_date": "2025-10-03",
@@ -102,7 +102,7 @@
     {
       "as_of_date": "2025-10-10",
       "predicted_for": "2025-10-13",
-      "ai_prediction": "NO TRADE",
+      "ai_prediction": "UP",
       "prob_up": 65.8,
       "prob_down": 34.2,
       "actual_up": 0,
@@ -111,7 +111,7 @@
       "low_as_of": 25156.85,
       "close_as_of": 25285.35,
       "close_next": 25227.35,
-      "result": "NO TRADE"
+      "result": "LOSS"
     },
     {
       "as_of_date": "2025-10-13",
@@ -172,7 +172,7 @@
     {
       "as_of_date": "2025-10-17",
       "predicted_for": "2025-10-20",
-      "ai_prediction": "NO TRADE",
+      "ai_prediction": "DOWN",
       "prob_up": 35.7,
       "prob_down": 64.3,
       "actual_up": 1,
@@ -181,7 +181,7 @@
       "low_as_of": 25508.6,
       "close_as_of": 25709.85,
       "close_next": 25843.15,
-      "result": "NO TRADE"
+      "result": "LOSS"
     },
     {
       "as_of_date": "2025-10-20",
@@ -214,7 +214,7 @@
     {
       "as_of_date": "2025-10-23",
       "predicted_for": "2025-10-24",
-      "ai_prediction": "NO TRADE",
+      "ai_prediction": "DOWN",
       "prob_up": 35.7,
       "prob_down": 64.3,
       "actual_up": 0,
@@ -223,7 +223,7 @@
       "low_as_of": 25862.45,
       "close_as_of": 25891.4,
       "close_next": 25795.15,
-      "result": "NO TRADE"
+      "result": "WIN"
     },
     {
       "as_of_date": "2025-10-24",
@@ -312,7 +312,7 @@
     {
       "as_of_date": "2025-11-03",
       "predicted_for": "2025-11-04",
-      "ai_prediction": "NO TRADE",
+      "ai_prediction": "UP",
       "prob_up": 70.0,
       "prob_down": 30.0,
       "actual_up": 0,
@@ -321,7 +321,7 @@
       "low_as_of": 25645.5,
       "close_as_of": 25763.35,
       "close_next": 25597.65,
-      "result": "NO TRADE"
+      "result": "LOSS"
     },
     {
       "as_of_date": "2025-11-04",
