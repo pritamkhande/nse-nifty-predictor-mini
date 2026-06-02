@@ -1,12 +1,12 @@
 {
   "symbol": "^NSEI",
   "name": "Nifty 50 Index",
-  "generated_at_utc": "2026-06-01T16:18:58Z",
+  "generated_at_utc": "2026-06-02T14:32:02Z",
   "last_data_date": "2025-11-18",
   "predicted_for": "2025-11-19",
   "prediction": "DOWN",
-  "prob_up": 0.12365568493113996,
-  "prob_down": 0.87634431506886,
+  "prob_up": 0.12275160104142431,
+  "prob_down": 0.8772483989585756,
   "threshold_used": {
     "thresh": 0.6,
     "separation": 0.25
